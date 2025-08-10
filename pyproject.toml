@@ -11,7 +11,7 @@ authors = [{name="You"}]
 requires-python = ">=3.9"
 dependencies = ["numpy", "matplotlib", "pyyaml"]
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "GPL-3.0-or-later"}
 keywords = ["loudspeaker", "acoustics", "horn", "electroacoustics", "modeling", "impedance", "SPL"]
 
 [tool.setuptools.packages.find]
