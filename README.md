@@ -1,53 +1,26 @@
 
-# SpeAcouPy
+# SpeAcouPy (wideband + labeled outputs)
 
-**SpeAcouPy** – Loudspeaker Electro-Mechanical-Acoustical Modelling in Python
+**What changed**
+- All SPL/plot outputs are labeled with the **room loading** (4pi/2pi/1pi/1/2pi) in both **titles and filenames**.
+- Added `__main__.py` so you can run `python -m speacoupy`, making it pipx-friendly (console script already present).
 
-- Universal two-terminal network `Net(op, parts)` (Series/Parallel are thin wrappers)
-- Driver + box + port models
-- Boundary-aware **piston radiation** element applied as **mechanical load**
-- Room loading options: **4π, 2π, 1π, 1/2π** (affect radiation impedance and SPL)
-- YAML-driven CLI
-
-## Install (dev)
+## pipx install
+With a local checkout:
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
-pip install -e .
+pipx install .        # or: pipx install git+https://github.com/mbrennwa/SpeAcouPy.git
+speacoupy --help
+python -m speacoupy --help
 ```
+pipx installs the `speacoupy` console script in an isolated venv. `__main__.py` enables `python -m speacoupy` too.
 
-## CLI
+## Example
 ```bash
-speacoupy examples/config_boundary.yaml --outdir plots
-# Override loading:
-speacoupy examples/config_boundary.yaml --loading 2pi
-# Disable radiation element:
-speacoupy examples/config_boundary.yaml --no-radiation
+speacoupy examples/config_wideband.yaml --outdir plots --angles 0,15,30,45
+# Outputs:
+#   plots/spl_2pi.png
+#   plots/impedance_2pi.png
+#   plots/spl_angles_2pi.png
 ```
 
-## YAML snippets
-```yaml
-room:
-  loading: 2pi     # 4pi | 2pi | 1pi | 1/2pi
-
-radiation:
-  enabled: true    # include front piston radiation as mechanical load
-```
-
-Unified network node example:
-```yaml
-network:
-  net:
-    op: series
-    parts:
-      - re: { R: 1.0 }
-      - net:
-          op: parallel
-          parts:
-            - driver: {}
-            - ce: { C: 4.7e-5 }
-```
-
-### Notes
-- Radiation model uses a **low-frequency approximation**; for higher ka a wideband piston model is recommended.
-- Boundary loading multiplies both the radiation resistance and reactance (simple image-source LF approximation).
+Filenames and titles carry the `[2pi]` (or whichever you choose). If you add data exports later, follow the same pattern.

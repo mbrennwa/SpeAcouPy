@@ -13,11 +13,8 @@ class Domain(str, Enum):
 
 @dataclass
 class Element(ABC):
-    """Generic lumped element. Subclasses implement impedance()."""
-
     @abstractmethod
     def impedance(self, omega: np.ndarray) -> np.ndarray:
-        """Return complex impedance Z(ω) in this element's domain."""
         ...
 
     def to(self, domain: Domain):
@@ -27,7 +24,6 @@ class Element(ABC):
 
 @dataclass
 class Net(Element):
-    """Universal two-terminal network: op ∈ {'series','parallel'} with a list of parts."""
     op: str
     parts: Sequence[Element]
 
@@ -49,14 +45,12 @@ class Net(Element):
             for p in self.parts:
                 Z = Z + p.impedance(omega)
             return Z
-        # parallel
         Y = 0j
         for p in self.parts:
             Zp = p.impedance(omega)
             Y = Y + 1/Zp
         return 1/Y
 
-# Backward-compatible convenience wrappers
 @dataclass
 class Series(Net):
     def __init__(self, parts: Sequence[Element]):

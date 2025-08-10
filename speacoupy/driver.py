@@ -12,14 +12,16 @@ class DriverMechanicalBranch:
     Rms_val: float
     Mms_val: float
     Cms_val: float
-    acoustic_load: Optional[Acoustic] = None
+    front_load: Optional[Acoustic] = None
+    back_load: Optional[Acoustic] = None
     Sd: float = 1.0
     domain: ClassVar[Domain] = Domain.MECHANICAL
     def impedance(self, omega):
         Zm = (self.Rms_val + 0j) + 1j*omega*self.Mms_val + 1/(1j*omega*self.Cms_val)
-        if self.acoustic_load is not None:
-            Zm = Zm + AcToMech(self.acoustic_load, self.Sd).impedance(omega)
-        return Zm
+        if self.front_load is None or self.back_load is None:
+            raise ValueError("DriverMechanicalBranch requires both front_load and back_load to be specified.")
+        Za_mech = AcToMech(self.front_load, self.Sd).impedance(omega) + AcToMech(self.back_load, self.Sd).impedance(omega)
+        return Zm + Za_mech
 
 @dataclass
 class Driver(Element):

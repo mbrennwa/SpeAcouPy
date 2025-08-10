@@ -26,3 +26,17 @@ def plot_impedance(f: np.ndarray, Zin: np.ndarray, outfile: str | None = None, t
     if outfile:
         fig.savefig(outfile, bbox_inches="tight", dpi=150)
     return fig
+
+def plot_spl_multi(f: np.ndarray, spl_db_list: list[np.ndarray], labels: list[str], outfile: str | None = None, title: str = "SPL vs Angle"):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    for y, lab in zip(spl_db_list, labels):
+        ax.semilogx(f, y, label=lab)
+    ax.set_xlabel("Frequency (Hz)")
+    ax.set_ylabel("SPL (dB re 20 µPa)")
+    ax.grid(True, which="both", ls=":")
+    ax.set_title(title)
+    ax.legend()
+    if outfile:
+        fig.savefig(outfile, bbox_inches="tight", dpi=150)
+    return fig
