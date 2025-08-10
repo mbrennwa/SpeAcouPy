@@ -1,11 +1,10 @@
-
 from __future__ import annotations
-import argparse, sys, os
+import argparse, os
 import numpy as np
 import yaml
 
 from . import (
-    omega_logspace, Series, Parallel,
+    omega_logspace, Net, Series, Parallel,
     Ce, Le, Re, Driver,
     DriverMechanicalBranch, Port, SealedBox, VentedBox,
 )
@@ -49,52 +48,73 @@ def build_driver(cfg: dict, load):
     return drv, Sd
 
 def make_elem(obj, drv):
+    """
+    Recursively build a two-terminal network.
+    Accepted YAML node forms:
+      - list => implicit series
+      - {series: [ ... ]} / {parallel: [ ... ]}  (legacy/back-compat)
+      - {net: { op: series|parallel, parts: [ ... ] }}  (new unified form)
+      - {re:{R:..}} / {le:{L:..}} / {ce:{C:..}} / {driver:{}}
+    """
+    # implicit series for top-level lists
     if isinstance(obj, list):
         return Series(parts=[make_elem(x, drv) for x in obj])
     if not isinstance(obj, dict):
         raise ValueError(f"Network item must be dict or list, got {type(obj)}: {obj}")
-    if 'series' in obj:
-        items = obj['series'] or []
+
+    # unified "net" form
+    if "net" in obj:
+        spec = obj["net"] or {}
+        op = (spec.get("op") or "series").lower()
+        parts = spec.get("parts") or []
+        return Net(op=op, parts=[make_elem(x, drv) for x in parts])
+
+    # legacy forms
+    if "series" in obj:
+        items = obj["series"] or []
         return Series(parts=[make_elem(x, drv) for x in items])
-    if 'parallel' in obj:
-        items = obj['parallel'] or []
+    if "parallel" in obj:
+        items = obj["parallel"] or []
         return Parallel(parts=[make_elem(x, drv) for x in items])
 
+    # leaf components
     if len(obj) != 1:
         raise ValueError(f"Component spec must have a single key, got: {obj}")
     (k, v), = obj.items()
     k = k.lower()
     v = v or {}
-    if k == 're':
-        return Re(R=float(v['R']))
-    if k == 'le':
-        return Le(L=float(v['L']))
-    if k == 'ce':
-        return Ce(C=float(v['C']))
-    if k == 'driver':
+    if k == "re":
+        return Re(R=float(v["R"]))
+    if k == "le":
+        return Le(L=float(v["L"]))
+    if k == "ce":
+        return Ce(C=float(v["C"]))
+    if k == "driver":
         return drv
     raise ValueError(f"Unknown component type: {k}")
 
 def build_network(cfg: dict, drv):
-    if 'series_network' in cfg:
+    # Backwards-compatible simple chain
+    if "series_network" in cfg:
         elems = []
-        for elem in cfg.get('series_network', []):
-            typ = elem['type'].lower()
-            if typ == 'ce':
-                elems.append(Ce(C=float(elem['C'])))
-            elif typ == 'le':
-                elems.append(Le(L=float(elem['L'])))
-            elif typ == 're':
-                elems.append(Re(R=float(elem['R'])))
-            elif typ == 'driver':
+        for elem in cfg.get("series_network", []):
+            typ = elem["type"].lower()
+            if typ == "ce":
+                elems.append(Ce(C=float(elem["C"])))
+            elif typ == "le":
+                elems.append(Le(L=float(elem["L"])))
+            elif typ == "re":
+                elems.append(Re(R=float(elem["R"])))
+            elif typ == "driver":
                 elems.append(drv)
             else:
                 raise ValueError(f"Unknown series element type: {typ}")
-        if not any(isinstance(x, Driver) for x in elems):
+        if not any(getattr(x, "__class__", None).__name__ == "Driver" for x in elems):
             elems.append(drv)
         return Series(parts=elems)
 
-    net_spec = cfg.get('network')
+    # Unified form 'network: { net: {...} }' or legacy 'network: {series|parallel: [...] }'
+    net_spec = cfg.get("network")
     if net_spec is None:
         return Series(parts=[drv])
     return make_elem(net_spec, drv)
@@ -117,7 +137,7 @@ def build_system(cfg: dict):
     return f, w, net, drv, Sd, Vsrc, r
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="SpeAcouPy: Loudspeaker SPL/Impedance plotter from YAML config (series/parallel)")
+    parser = argparse.ArgumentParser(description="SpeAcouPy: YAML-driven SPL/Impedance (unified Net)")
     parser.add_argument("config", help="YAML config file")
     parser.add_argument("--outdir", default="plots", help="Output directory for plots")
     parser.add_argument("--prefix", default="", help="Filename prefix")

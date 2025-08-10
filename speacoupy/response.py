@@ -2,7 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
-from .domains import Series
+from .domains import Element
 from .driver import Driver
 from .acoustic import RHO0, P0
 
@@ -22,7 +22,7 @@ def omega_logspace(fmin=10.0, fmax=20000.0, n=1000):
     return f, 2*np.pi*f
 
 class ResponseSolver:
-    def __init__(self, series_net: Series, driver: Driver, Sd: float):
+    def __init__(self, series_net: Element, driver: Driver, Sd: float):
         self.series = series_net
         self.driver = driver
         self.Sd = Sd

@@ -1,5 +1,5 @@
 
-from .domains import Domain, Element, Series, Parallel
+from .domains import Domain, Element, Net, Series, Parallel
 from .electrical import Electrical, Re, Le, Ce, CeNonIdeal
 from .mechanical import Mechanical, Rms, Mms, Cms
 from .acoustic import Acoustic, Ra, Ma, Ca, SealedBox, Port, VentedBox, RHO0, C0, P0

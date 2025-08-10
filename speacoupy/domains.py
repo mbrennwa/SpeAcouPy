@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
@@ -26,38 +25,46 @@ class Element(ABC):
         raise NotImplementedError(f"{self.__class__.__name__} cannot transform to {domain} directly.")
 
 @dataclass
-class Series(Element):
+class Net(Element):
+    """
+    Universal two-terminal network: op ∈ {'series','parallel'} with a list of parts.
+    Enforces that all parts share the same domain (insert adapters to convert).
+    """
+    op: str
     parts: Sequence[Element]
 
     def __post_init__(self):
         if not self.parts:
-            raise ValueError("Series() requires at least one element")
+            raise ValueError("Net() requires at least one element")
+        op_norm = self.op.lower().strip()
+        if op_norm not in ("series","parallel"):
+            raise ValueError(f"Net.op must be 'series' or 'parallel', got: {self.op}")
+        self.op = op_norm
         d0 = getattr(self.parts[0], "domain", None)
         if any(getattr(p, "domain", None) != d0 for p in self.parts):
-            raise ValueError("All elements in Series must share the same domain. Insert adapters/transformers.")
-        self.domain = d0
+            raise ValueError("All elements in a Net must share the same domain. Insert adapters/transformers.")
+        self.domain = d0  # type: ignore[attr-defined]
 
     def impedance(self, omega: np.ndarray) -> np.ndarray:
-        Z = 0j
-        for p in self.parts:
-            Z = Z + p.impedance(omega)
-        return Z
-
-@dataclass
-class Parallel(Element):
-    parts: Sequence[Element]
-
-    def __post_init__(self):
-        if not self.parts:
-            raise ValueError("Parallel() requires at least one element")
-        d0 = getattr(self.parts[0], "domain", None)
-        if any(getattr(p, "domain", None) != d0 for p in self.parts):
-            raise ValueError("All elements in Parallel must share the same domain. Insert adapters/transformers.")
-        self.domain = d0
-
-    def impedance(self, omega: np.ndarray) -> np.ndarray:
+        if self.op == "series":
+            Z = 0j
+            for p in self.parts:
+                Z = Z + p.impedance(omega)
+            return Z
+        # parallel
         Y = 0j
         for p in self.parts:
             Zp = p.impedance(omega)
             Y = Y + 1/Zp
         return 1/Y
+
+# Backward-compatible convenience wrappers
+@dataclass
+class Series(Net):
+    def __init__(self, parts: Sequence[Element]):
+        super().__init__(op="series", parts=parts)
+
+@dataclass
+class Parallel(Net):
+    def __init__(self, parts: Sequence[Element]):
+        super().__init__(op="parallel", parts=parts)
