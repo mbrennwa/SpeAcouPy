@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
@@ -26,10 +27,7 @@ class Element(ABC):
 
 @dataclass
 class Net(Element):
-    """
-    Universal two-terminal network: op ∈ {'series','parallel'} with a list of parts.
-    Enforces that all parts share the same domain (insert adapters to convert).
-    """
+    """Universal two-terminal network: op ∈ {'series','parallel'} with a list of parts."""
     op: str
     parts: Sequence[Element]
 

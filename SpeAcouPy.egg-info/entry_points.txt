@@ -1,0 +1,2 @@
+[console_scripts]
+speacoupy = speacoupy.cli:main

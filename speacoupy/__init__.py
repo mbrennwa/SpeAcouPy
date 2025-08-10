@@ -2,7 +2,7 @@
 from .domains import Domain, Element, Net, Series, Parallel
 from .electrical import Electrical, Re, Le, Ce, CeNonIdeal
 from .mechanical import Mechanical, Rms, Mms, Cms
-from .acoustic import Acoustic, Ra, Ma, Ca, SealedBox, Port, VentedBox, RHO0, C0, P0
+from .acoustic import Acoustic, Ra, Ma, Ca, SealedBox, Port, VentedBox, RadiationPistonLF, RHO0, C0, P0
 from .transformers import AcToMech, MechToElec
 from .driver import DriverMechanicalBranch, Driver
 from .response import ResponseSolver, ResponseResult, omega_logspace

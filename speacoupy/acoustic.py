@@ -62,3 +62,29 @@ class VentedBox(Acoustic):
         Z_port = self.port.impedance(omega)
         Y = 1/Z_box + 1/Z_port
         return 1/Y
+
+@dataclass
+class RadiationPistonLF(Acoustic):
+    """Low-frequency baffled piston radiation with boundary loading.
+    Approximation:
+      eta ≈ (ka)^2 / 2       (radiation efficiency)
+      X/(ρcS) ≈ (8/(3π))ka   (reactive part)
+    Boundary loading factor k_b (image sources):
+      4π -> 1, 2π -> 2, 1π -> 4, 1/2π -> 8
+    We scale both R and X by k_b (simple LF approximation).
+    """
+    Sd: float
+    loading: str = "4pi"
+
+    def impedance(self, omega):
+        S = self.Sd
+        a = np.sqrt(S / np.pi)
+        k = omega / C0
+        ka = k * a
+        eta = 0.5 * (ka**2)
+        Xnorm = (8.0 / (3.0 * np.pi)) * ka
+        Z0 = RHO0 * C0 * S * (eta + 1j * Xnorm)
+
+        kb_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
+        kb = kb_map.get((self.loading or "4pi").lower(), 1.0)
+        return kb * Z0

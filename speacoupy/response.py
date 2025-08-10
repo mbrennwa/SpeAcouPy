@@ -26,7 +26,7 @@ class ResponseSolver:
         self.series = series_net
         self.driver = driver
         self.Sd = Sd
-    def solve(self, omega: np.ndarray, V_source: float = 2.83, r: float = 1.0) -> ResponseResult:
+    def solve(self, omega: np.ndarray, V_source: float = 2.83, r: float = 1.0, loading: str = "4pi") -> ResponseResult:
         Z_total = self.series.impedance(omega)
         Z_driver = self.driver.impedance(omega)
         Vd = V_source * (Z_driver / Z_total)
@@ -36,7 +36,11 @@ class ResponseSolver:
         Zm = (self.driver.Bl**2) / (Zin_drv - Zvc)
         v = (self.driver.Bl * Id) / Zm
         U = v * self.Sd
-        p = 1j * omega * RHO0 * U / (4*np.pi*r)
+
+        loading = (loading or "4pi").lower()
+        k_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
+        k = k_map.get(loading, 1.0)
+        p = k * (1j * omega * RHO0 * U / (4*np.pi*r))
         SPL = 20*np.log10(np.maximum(np.abs(p), 1e-16) / P0)
         f = omega / (2*np.pi)
         return ResponseResult(f=f, Zin=Z_total, Vd=Vd, Id=Id, v=v, U=U, p_onaxis=p, SPL_onaxis=SPL)

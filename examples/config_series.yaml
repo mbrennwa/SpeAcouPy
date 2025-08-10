@@ -5,6 +5,9 @@ frequency:
   max_hz: 10000
   points: 1200
 
+room:
+  loading: 2pi   # 4pi | 2pi | 1pi | 1/2pi<
+
 box:
   type: sealed
   Vb_l: 18

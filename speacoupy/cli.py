@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 import argparse, os
 import numpy as np
@@ -6,7 +7,7 @@ import yaml
 from . import (
     omega_logspace, Net, Series, Parallel,
     Ce, Le, Re, Driver,
-    DriverMechanicalBranch, Port, SealedBox, VentedBox,
+    DriverMechanicalBranch, Port, SealedBox, VentedBox, RadiationPistonLF,
 )
 from .plotting import plot_spl, plot_impedance
 from .response import ResponseSolver
@@ -15,7 +16,7 @@ def load_config(path: str) -> dict:
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-def build_acoustic_load(cfg: dict):
+def build_back_load(cfg: dict):
     box = cfg.get("box", {"type": "sealed", "Vb_l": 20.0})
     box_type = box.get("type", "sealed").lower()
     if box_type == "sealed":
@@ -29,14 +30,21 @@ def build_acoustic_load(cfg: dict):
     else:
         raise ValueError(f"Unknown box type: {box_type}")
 
-def build_driver(cfg: dict, load):
+def build_front_radiation(cfg: dict, Sd: float, loading: str):
+    rad_cfg = cfg.get("radiation", {})
+    enabled = bool(rad_cfg.get("enabled", True))
+    if not enabled:
+        return None
+    return RadiationPistonLF(Sd=Sd, loading=loading)
+
+def build_driver(cfg: dict, combined_acoustic_load):
     drv_cfg = cfg["driver"]
     Sd = float(drv_cfg.get("Sd_m2", 0.053))
     mot = DriverMechanicalBranch(
         Rms_val=float(drv_cfg.get("Rms", 1.6)),
         Mms_val=float(drv_cfg.get("Mms", 0.020)),
         Cms_val=float(drv_cfg.get("Cms", 7.0e-4)),
-        acoustic_load=load,
+        acoustic_load=combined_acoustic_load,
         Sd=Sd,
     )
     drv = Driver(
@@ -48,28 +56,20 @@ def build_driver(cfg: dict, load):
     return drv, Sd
 
 def make_elem(obj, drv):
-    """
-    Recursively build a two-terminal network.
-    Accepted YAML node forms:
-      - list => implicit series
-      - {series: [ ... ]} / {parallel: [ ... ]}  (legacy/back-compat)
-      - {net: { op: series|parallel, parts: [ ... ] }}  (new unified form)
-      - {re:{R:..}} / {le:{L:..}} / {ce:{C:..}} / {driver:{}}
-    """
-    # implicit series for top-level lists
+    # implicit series for lists
     if isinstance(obj, list):
         return Series(parts=[make_elem(x, drv) for x in obj])
     if not isinstance(obj, dict):
         raise ValueError(f"Network item must be dict or list, got {type(obj)}: {obj}")
 
-    # unified "net" form
+    # unified
     if "net" in obj:
         spec = obj["net"] or {}
         op = (spec.get("op") or "series").lower()
         parts = spec.get("parts") or []
         return Net(op=op, parts=[make_elem(x, drv) for x in parts])
 
-    # legacy forms
+    # legacy
     if "series" in obj:
         items = obj["series"] or []
         return Series(parts=[make_elem(x, drv) for x in items])
@@ -77,7 +77,7 @@ def make_elem(obj, drv):
         items = obj["parallel"] or []
         return Parallel(parts=[make_elem(x, drv) for x in items])
 
-    # leaf components
+    # leaves
     if len(obj) != 1:
         raise ValueError(f"Component spec must have a single key, got: {obj}")
     (k, v), = obj.items()
@@ -94,7 +94,6 @@ def make_elem(obj, drv):
     raise ValueError(f"Unknown component type: {k}")
 
 def build_network(cfg: dict, drv):
-    # Backwards-compatible simple chain
     if "series_network" in cfg:
         elems = []
         for elem in cfg.get("series_network", []):
@@ -113,7 +112,6 @@ def build_network(cfg: dict, drv):
             elems.append(drv)
         return Series(parts=elems)
 
-    # Unified form 'network: { net: {...} }' or legacy 'network: {series|parallel: [...] }'
     net_spec = cfg.get("network")
     if net_spec is None:
         return Series(parts=[drv])
@@ -126,28 +124,56 @@ def build_system(cfg: dict):
     npts = int(freq.get("points", 1200))
     f, w = omega_logspace(fmin, fmax, npts)
 
-    load = build_acoustic_load(cfg)
-    drv, Sd = build_driver(cfg, load)
+    # room/environment loading (affects radiation)
+    room = cfg.get("room", {}) or cfg.get("environment", {}) or {}
+    loading = (room.get("loading") or "4pi").lower()
+
+    # back and front loads
+    back = build_back_load(cfg)
+    Sd = float(cfg.get("driver", {}).get("Sd_m2", 0.053))
+    front = build_front_radiation(cfg, Sd=Sd, loading=loading)
+
+    # combine acoustic loads in series on mechanical side
+    if front is not None and back is not None:
+        acoustic_load = Series(parts=[front, back])
+    elif front is not None:
+        acoustic_load = front
+    else:
+        acoustic_load = back
+
+    drv, Sd = build_driver(cfg, acoustic_load)
     net = build_network(cfg, drv)
 
     src = cfg.get("source", {})
     Vsrc = float(src.get("volts_rms", 2.83))
     r = float(src.get("distance_m", 1.0))
 
-    return f, w, net, drv, Sd, Vsrc, r
+    return f, w, net, drv, Sd, Vsrc, r, loading
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="SpeAcouPy: YAML-driven SPL/Impedance (unified Net)")
+    parser = argparse.ArgumentParser(description="SpeAcouPy: YAML-driven SPL/Impedance (boundary-aware radiation + room loading)")
     parser.add_argument("config", help="YAML config file")
     parser.add_argument("--outdir", default="plots", help="Output directory for plots")
     parser.add_argument("--prefix", default="", help="Filename prefix")
+    parser.add_argument("--loading", default="", help="Override room loading 4pi|2pi|1pi|1/2pi")
+    parser.add_argument("--no-radiation", action="store_true", help="Disable front radiation element")
     args = parser.parse_args(argv)
 
     cfg = load_config(args.config)
-    f, w, net, drv, Sd, Vsrc, r = build_system(cfg)
+    f, w, net, drv, Sd, Vsrc, r, loading_cfg = build_system(cfg)
+    loading = (args.loading or loading_cfg or "4pi").lower()
+
+    # Optionally disable radiation by flag
+    if args.no_radiation:
+        # rebuild without front radiation
+        cfg2 = dict(cfg)
+        rad = dict(cfg2.get("radiation", {}) or {})
+        rad["enabled"] = False
+        cfg2["radiation"] = rad
+        f, w, net, drv, Sd, Vsrc, r, loading = build_system(cfg2)
 
     solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
-    res = solver.solve(w, V_source=Vsrc, r=r)
+    res = solver.solve(w, V_source=Vsrc, r=r, loading=loading)
 
     os.makedirs(args.outdir, exist_ok=True)
     pre = (args.prefix + "_") if args.prefix else ""
