@@ -1,16 +1,8 @@
-
-# Simple series network (back-compat with earlier examples)
+# Simple series network (updated: explicit front/back loads)
 frequency:
   min_hz: 15
   max_hz: 10000
   points: 1200
-
-room:
-  loading: 2pi   # 4pi | 2pi | 1pi | 1/2pi<
-
-box:
-  type: sealed
-  Vb_l: 18
 
 driver:
   Re: 6.2
@@ -21,6 +13,14 @@ driver:
   Mms: 0.021
   Cms: 0.00065
 
+  front_load:
+    type: piston_wideband
+    loading: 2pi
+  back_load:
+    type: sealed
+    Vb_l: 18
+
+# Back-compat chain kept; driver sits in the series
 series_network:
   - type: ce
     C: 0.000068
@@ -29,3 +29,6 @@ series_network:
 source:
   volts_rms: 2.83
   distance_m: 1.0
+
+room:
+  loading: 2pi
