@@ -9,7 +9,7 @@ Then run the speacoupy command to use SpeAcouPy.
 
 (B) If you want to work on the SpeAcouPy code base, clone the GitHub repo and install from there:
 
->> git clone https://github.com/mbrennwa/SpeAcouPy.git SpeAcouPy.git
+>> git clone git@github.com:mbrennwa/SpeAcouPy.git SpeAcouPy.git
 >> cd SpeAcouPy.git && python3 -m venv .venv && source .venv/bin/activate && pip install -e .
 
 Then run the speacoupy command inside the venv to use your local copy of the SpeAcouPy repo.
