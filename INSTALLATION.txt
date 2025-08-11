@@ -1,4 +1,4 @@
-Installation Notes
+### SpeAcouPy Installation Notes ###
 
 (A) If you simply want to use SpeAcouPy, install using pipx directly from the GitHub repo:
 
