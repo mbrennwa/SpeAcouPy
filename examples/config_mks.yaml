@@ -1,0 +1,34 @@
+
+# Minimal example: MKS driver inputs (Sd [m^2], fs [Hz], Vas [m^3], Qms, Qes)
+frequency:
+  min_hz: 20
+  max_hz: 20000
+  points: 1600
+
+elements:
+  - type: piston_wideband
+    label: FL
+    loading: 2pi
+
+  - type: sealed
+    label: BL
+    Vb: 0.018            # m^3
+
+  - type: driver
+    label: D1
+    Re: 5.7
+    Le: 0.00035
+    Sd: 0.053            # m^2
+    fs: 45               # Hz
+    Vas: 0.024           # m^3
+    Qms: 5.2
+    Qes: 0.45
+    front_load: FL
+    back_load: BL
+
+network:
+  - D1
+
+source:
+  volts_rms: 2.83
+  distance_m: 1.0
