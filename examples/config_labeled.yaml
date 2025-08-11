@@ -1,50 +1,42 @@
-# New labeled-elements schema
 frequency:
   min_hz: 20
   max_hz: 20000
   points: 1600
-
-# Define all elements up-front (type + unique label)
 elements:
-  - type: re
-    label: R_pad
-    R: 1.0
-
-  - type: ce
-    label: C_shunt
-    C: 4.7e-5
-
-  - type: piston_wideband
-    label: FL
-    loading: 2pi
-
-  - type: sealed
-    label: BL
-    Vb_l: 18
-
-  - type: driver
-    label: D1
-    Re: 5.7
-    Le: 0.00035
-    Bl: 7.4
-    Sd_m2: 0.053
-    Rms: 1.6
-    Mms: 0.020
-    Cms: 0.0007
-    front_load: FL
-    back_load: BL
-
-# Build network from labels (nested series/parallel)
+- type: re
+  label: R_pad
+  R: 1.0
+- type: ce
+  label: C_shunt
+  C: 4.7e-05
+- type: piston_wideband
+  label: FL
+  loading: 2pi
+- type: sealed
+  label: BL
+  Vb: 0.018000000000000002
+- type: driver
+  label: D1
+  Re: 5.7
+  Le: 0.00035
+  front_load: FL
+  back_load: BL
+  Sd: 0.053
+  fs: 42.53594774724118
+  Vas: 0.2785252073548
+  Qms: 3.340765523905305
+  Qes: 0.556387537947706
 network:
   series:
-    - R_pad
-    - parallel:
-        - D1
-        - C_shunt
-
-# Optional presentation
-angles_deg: [0, 15, 30, 45]
-
+  - R_pad
+  - parallel:
+    - D1
+    - C_shunt
+angles_deg:
+- 0
+- 15
+- 30
+- 45
 source:
   volts_rms: 2.83
   distance_m: 1.0
