@@ -65,7 +65,7 @@ class VentedBox(Acoustic):
         return 1/Y
 
 @dataclass
-class RadiationPistonWB(Acoustic):
+class RadiationPiston(Acoustic):
     """Wideband baffled circular piston radiation impedance.
     Z = ρ0 c0 π a^2 * [ 1 - J1(2ka)/(k a) - j H1(2ka)/(k a) ]
     A boundary factor k_b ∈ {1,2,4,8} scales R and X for 4π,2π,1π,1/2π respectively.

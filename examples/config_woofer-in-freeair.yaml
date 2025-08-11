@@ -3,7 +3,7 @@ frequency:
   max_hz: 20000
   points: 1600
 elements:
-- type: piston_wideband
+- type: piston
   label: FREE_AIR_LOADING
   loading: 4pi
 - type: driver

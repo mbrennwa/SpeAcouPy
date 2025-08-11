@@ -9,7 +9,7 @@ elements:
 - type: ce
   label: C_shunt
   C: 4.7e-05
-- type: piston_wideband
+- type: piston
   label: FL
   loading: 2pi
 - type: sealed

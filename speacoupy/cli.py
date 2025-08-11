@@ -63,7 +63,7 @@ def build_registry(cfg: dict):
         elif typ in ("ce","capacitor"):
             reg[lab] = Ce(C=float(e["C"]))
         elif typ in ("sealed","vented","piston","piston_wideband","radiation","sealed_box","vented_box","bass_reflex"):
-            Sd_hint = float(e.get("Sd", e.get("Sd_m2", 0.053)))
+            Sd_hint = float(e.get("Sd", e.get("Sd", 0.053)))
             reg[lab] = build_acoustic(e, Sd=Sd_hint)
         elif typ == "driver":
             pending_drivers.append(e)
