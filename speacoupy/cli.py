@@ -8,7 +8,7 @@ import yaml
 from . import (
     omega_logspace, Net, Series, Parallel,
     Ce, Le, Re, Driver,
-    DriverMechanicalBranch, Port, SealedBox, VentedBox, RadiationPistonWB,
+    DriverMechanicalBranch, Port, SealedBox, VentedBox, RadiationPiston,
 )
 from .plotting import plot_spl, plot_impedance, plot_spl_multi
 from .response import ResponseSolver
@@ -31,7 +31,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float):
         return VentedBox(Vb=Vb, port=Port(diameter=d, length=L))
     if t in ("piston","piston_wideband","radiation"):
         loading = (spec.get("loading") or "4pi").lower()
-        return RadiationPistonWB(Sd=Sd, loading=loading)
+        return RadiationPiston(Sd=Sd, loading=loading)
     raise ValueError(f"Unknown acoustic element type: {t}")
 
 def build_registry(cfg: dict):
