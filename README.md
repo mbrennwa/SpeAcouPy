@@ -24,3 +24,37 @@ speacoupy examples/config_wideband.yaml --outdir plots --angles 0,15,30,45
 ```
 
 Filenames and titles carry the `[2pi]` (or whichever you choose). If you add data exports later, follow the same pattern.
+## New configuration format (simple & explicit)
+
+1. Define *elements* up-front with a `type`, unique `label`, and parameters.
+2. Build the *network* as nested `series` / `parallel`, referencing labels.
+
+Example:
+```yaml
+elements:
+  - type: re
+    label: R_pad
+    R: 1.0
+  - type: piston_wideband
+    label: FL
+    loading: 2pi
+  - type: sealed
+    label: BL
+    Vb_l: 18
+  - type: driver
+    label: D1
+    Re: 5.7
+    Le: 0.00035
+    Bl: 7.4
+    Sd_m2: 0.053
+    Rms: 1.6
+    Mms: 0.020
+    Cms: 0.0007
+    front_load: FL
+    back_load: BL
+
+network:
+  series:
+    - R_pad
+    - D1
+```
