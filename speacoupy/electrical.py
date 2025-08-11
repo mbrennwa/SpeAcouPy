@@ -23,15 +23,3 @@ class Le(Electrical):
 class Ce(Electrical):
     C: float = 0.0
     def impedance(self, omega): return 1/(1j * omega * self.C)
-
-@dataclass
-class CeNonIdeal(Electrical):
-    C: float
-    ESR: float = 0.0
-    ESL: float = 0.0
-    R_leak: float = float('inf')
-    def impedance(self, omega):
-        Z_series = self.ESR + 1j*omega*self.ESL + 1/(1j*omega*self.C)
-        if self.R_leak == float('inf'):
-            return Z_series
-        return 1 / (1/Z_series + 1/self.R_leak)
