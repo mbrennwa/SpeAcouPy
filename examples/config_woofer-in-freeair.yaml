@@ -1,0 +1,33 @@
+# New labeled-elements schema
+frequency:
+  min_hz: 20
+  max_hz: 20000
+  points: 1600
+
+# Define all elements up-front (type + unique label)
+elements:
+
+  - type: piston_wideband
+    label: FREE_AIR_LOADING
+    loading: 4pi
+
+  - type: driver
+    label: woofer
+    Re: 10
+    Le: 0.00035
+    Bl: 7.4
+    Sd_m2: 0.053
+    Rms: 1.6
+    Mms: 0.010
+    Cms: 0.001
+    # fs = 1/sqrt(Cms*Mms)/2/pi
+    front_load: FREE_AIR_LOADING
+    back_load: FREE_AIR_LOADING
+
+# Build network from labels (nested series/parallel)
+network:
+  - woofer
+
+source:
+  volts_rms: 2.83
+  distance_m: 1.0
