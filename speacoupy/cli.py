@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 import argparse, os
 from typing import Any, Dict
@@ -28,8 +27,12 @@ def build_acoustic(spec: Dict[str, Any], Sd: float):
 		Vb = float(spec["Vb"])  # m^3 (MKS)
 		d  = float(spec["port_d_m"])
 		L  = float(spec["port_L_m"])
-		return VentedBox(Vb=Vb, port=Port(diameter=d, length=L))
-	if t in ("piston","piston_wideband","radiation"):
+		vb = VentedBox(Vb=Vb, port=Port(diameter=d, length=L))
+		# carry placeholder; resolve later
+		if "port_load" in spec:
+			setattr(vb, "port_load", spec.get("port_load"))
+		return vb
+	if t in ("piston","radiation"):
 		loading = (spec.get("loading") or "4pi").lower()
 		return RadiationPiston(Sd=Sd, loading=loading)
 	raise ValueError(f"Unknown acoustic element type: {t}")
@@ -38,7 +41,7 @@ def build_registry(cfg: dict):
 	"""
 	Two-pass build:
 	1) create all non-driver elements from 'elements: [{type,label,...}]'
-	2) create drivers (need references to front/back loads by label)
+	2) create drivers (need references to front/back loads by label or 'radiation_space' placeholder)
 	"""
 	elems = cfg.get("elements") or []
 	if not isinstance(elems, list) or not elems:
@@ -57,13 +60,13 @@ def build_registry(cfg: dict):
 		typ = (e.get("type") or "").lower()
 		lab = e["label"]
 		if typ in ("re","resistor"):
-			reg[lab] = Re(R=float(e["Re"] if "Re" in e else e["R"]))
+			reg[lab] = Re(R=float(e.get("Re", e.get("R"))))
 		elif typ in ("le","inductor"):
-			reg[lab] = Le(L=float(e["Le"] if "Le" in e else e["L"]))
+			reg[lab] = Le(L=float(e.get("Le", e.get("L"))))
 		elif typ in ("ce","capacitor"):
 			reg[lab] = Ce(C=float(e["C"]))
-		elif typ in ("sealed","vented","piston","piston_wideband","radiation","sealed_box","vented_box","bass_reflex"):
-			Sd_hint = float(e.get("Sd", e.get("Sd_m2", 0.053)))
+		elif typ in ("sealed","vented","piston","radiation","sealed_box","vented_box","bass_reflex"):
+			Sd_hint = float(e.get("Sd", 0.053))
 			reg[lab] = build_acoustic(e, Sd=Sd_hint)
 		elif typ == "driver":
 			pending_drivers.append(e)
@@ -89,8 +92,16 @@ def build_registry(cfg: dict):
 		back_lab  = e.get("back_load")
 		if not front_lab or not back_lab:
 			raise ValueError(f"Driver '{lab}' must specify front_load and back_load labels.")
-		if front_lab not in reg or back_lab not in reg:
+
+		def _is_known_load(lbl: str) -> bool:
+			return (isinstance(lbl, str) and lbl == 'radiation_space') or (lbl in reg)
+
+		if not _is_known_load(front_lab) or not _is_known_load(back_lab):
 			raise ValueError(f"Driver '{lab}' references unknown loads: front_load={front_lab}, back_load={back_lab}")
+
+		# Keep placeholders; translate later in build_system
+		front_load_obj = reg[front_lab] if front_lab in reg else 'radiation_space'
+		back_load_obj  = reg[back_lab]  if back_lab  in reg else 'radiation_space'
 
 		omega_s = TWOPI * fs
 		Cms = Vas / (RHO0 * (C_AIR**2) * (Sd**2))
@@ -102,8 +113,8 @@ def build_registry(cfg: dict):
 			Rms_val=Rms,
 			Mms_val=Mms,
 			Cms_val=Cms,
-			front_load=reg[front_lab],
-			back_load=reg[back_lab],
+			front_load=front_load_obj,
+			back_load=back_load_obj,
 			Sd=Sd,
 		)
 		drv = Driver(
@@ -136,81 +147,61 @@ def build_net(node, reg):
 		return Parallel(parts=[build_net(x, reg) for x in node["parallel"]])
 	raise ValueError(f"Network dict must have 'series' or 'parallel' key; got {node}")
 
-
 def _get_global_rspace(cfg: dict) -> str:
-	val = str(cfg.get("radiation_space", "")).strip().lower()
+	val = str(cfg.get("radiation_space","")).strip().lower()
 	if val == "0.5pi":
 		val = "1/2pi"
 	if val not in {"4pi","2pi","1pi","1/2pi"}:
-		raise ValueError("Top-level 'radiation_space' is required and must be one of: 4pi, 2pi, 1pi, 1/2pi")
+		raise ValueError("Top-level 'radiation_space' must be one of: 4pi, 2pi, 1pi, 1/2pi")
 	return val
 
-
 def build_system(cfg: dict):
-	global_space = _get_global_rspace(cfg)
 	fmin = float(cfg.get("frequency", {}).get("min_hz", 10.0))
 	fmax = float(cfg.get("frequency", {}).get("max_hz", 20000.0))
 	npts = int(cfg.get("frequency", {}).get("points", 1200))
 	f, w = omega_logspace(fmin, fmax, npts)
 
+	# Build registry first
 	reg, drv_label = build_registry(cfg)
 
-from .acoustic import RadiationSpace, RadiationPiston
-# Make radiation_space a first-class registry element (code-only), so loads can reference it
-reg['radiation_space'] = RadiationSpace(global_space)
+	# Top-level radiation space
+	global_space = _get_global_rspace(cfg)
 
-# Resolve placeholders across registry (drivers, vented.port mouth, standalone Port)
-import math
-from .driver import Driver as DriverClass
+	# Resolve placeholders across registry
+	from .acoustic import RadiationPiston
+	from .driver import Driver as DriverClass
+	import math
 
-for lbl, obj in list(reg.items()):
-	# Vented box port mouth
-	if obj.__class__.__name__ == 'VentedBox':
-		pl = getattr(obj, 'port_load', None)
-		if pl is None:
-			continue
-		if isinstance(pl, str) and pl == 'radiation_space':
-			port = getattr(obj, 'port', None)
-			if port is None or not hasattr(port, 'diameter'):
-				raise ValueError(f"VentedBox '{lbl}' needs port geometry to derive mouth Sd")
-			Sd_port = math.pi * (0.5*port.diameter)**2
-			setattr(obj, 'mouth_radiator', reg['radiation_space'].make_piston(Sd_port))
-		elif isinstance(pl, str):
-			if pl not in reg:
-				raise ValueError(f"VentedBox '{lbl}' port_load references unknown label '{pl}'")
-			setattr(obj, 'mouth_radiator', reg[pl])
-		else:
-			# already a linked element
-			setattr(obj, 'mouth_radiator', pl)
+	# Driver front/back placeholders
+	drv = None
+	for v in reg.values():
+		if isinstance(v, DriverClass):
+			drv = v
+			break
+	if drv is None:
+		raise ValueError("No driver found in registry.")
+	Sd_drv = drv.motional.Sd
+	if isinstance(drv.motional.front_load, str) and drv.motional.front_load == 'radiation_space':
+		drv.motional.front_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
+	if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiation_space':
+		drv.motional.back_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
 
-	# Standalone Port (if you support it as an element)
-	if obj.__class__.__name__ == 'Port':
-		pl = getattr(obj, 'port_load', None)
-		if pl is None:
-			continue
-		if isinstance(pl, str) and pl == 'radiation_space':
-			if not hasattr(obj, 'diameter'):
-				raise ValueError(f"Port '{lbl}' needs diameter to derive mouth Sd")
-			Sd_port = math.pi * (0.5*obj.diameter)**2
-			reg[lbl] = reg['radiation_space'].make_piston(Sd_port)
-		elif isinstance(pl, str):
-			if pl not in reg:
-				raise ValueError(f"Port '{lbl}' port_load references unknown label '{pl}'")
-			setattr(obj, 'mouth_radiator', reg[pl])
-
-# Driver sides: translate 'radiation_space' to pistons using driver Sd
-drv = None
-for v in reg.values():
-	if isinstance(v, DriverClass):
-		drv = v
-		break
-if drv is None:
-	raise ValueError("No driver found in registry.")
-Sd = drv.motional.Sd
-if isinstance(drv.motional.front_load, str) and drv.motional.front_load == 'radiation_space':
-	drv.motional.front_load = reg['radiation_space'].make_piston(Sd)
-if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiation_space':
-	drv.motional.back_load = reg['radiation_space'].make_piston(Sd)
+	# Vented box mouth
+	for lbl, obj in list(reg.items()):
+		if obj.__class__.__name__ == 'VentedBox':
+			pl = getattr(obj, 'port_load', None)
+			if pl is None:
+				continue
+			if isinstance(pl, str) and pl == 'radiation_space':
+				port = getattr(obj, 'port', None)
+				if port is None or not hasattr(port, 'diameter'):
+					raise ValueError(f"VentedBox '{lbl}' needs port geometry to derive mouth Sd")
+				Sd_port = math.pi * (0.5*port.diameter)**2
+				setattr(obj, 'mouth_radiator', RadiationPiston(Sd=Sd_port, loading=global_space))
+			elif isinstance(pl, str):
+				if pl not in reg:
+					raise ValueError(f"VentedBox '{lbl}' port_load references unknown label '{pl}'")
+				setattr(obj, 'mouth_radiator', reg[pl])
 
 	net_spec = cfg.get("network")
 	if not net_spec:
@@ -223,17 +214,10 @@ if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiat
 	angles = np.array(angles, dtype=float) if angles else None
 
 	loading_label = global_space
-	from .driver import Driver as DriverClass
-	for _, v in reg.items():
-		if isinstance(v, DriverClass):
-			loading_label = global_space
-			drv = v
-			break
-
 	return f, w, net, drv, drv.motional.Sd, Vsrc, r, loading_label, angles
 
 def main(argv=None):
-	parser = argparse.ArgumentParser(description="SpeAcouPy: MKS driver inputs (Sd, fs, Vas, Qms, Qes)")
+	parser = argparse.ArgumentParser(prog='speacoupy', description="SpeAcouPy: MKS driver inputs (Sd, fs, Vas, Qms, Qes)")
 	parser.add_argument("config", help="YAML config file")
 	parser.add_argument("--outdir", default="plots", help="Output directory for plots")
 	parser.add_argument("--prefix", default="", help="Filename prefix")
@@ -250,7 +234,7 @@ def main(argv=None):
 	pre = (args.prefix + "_") if args.prefix else ""
 
 	plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}spl_{tag}.png"),
-			title=f"On-axis SPL (1 m) [{loading_label}]")
+				title=f"On-axis SPL (1 m) [{loading_label}]")
 	plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}impedance_{tag}.png"),
 				title=f"Input Impedance Magnitude [{loading_label}]")
 	if res.SPL_offaxis is not None and res.angles_deg is not None:
