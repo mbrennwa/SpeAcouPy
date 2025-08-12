@@ -1,30 +1,36 @@
 elements:
-  - type: Driver
-    label: driver1
-    Sd: 0.053        # m²
-    fs: 40           # Hz
-    Vas: 0.1         # m³
+  - type: piston
+    label: front_rad
+    Sd: 0.053       # m^2
+    loading: 4pi
+
+  - type: piston
+    label: back_rad
+    Sd: 0.053
+    loading: 4pi
+
+  - type: driver
+    label: D1
+    Sd: 0.053       # m^2
+    fs: 40          # Hz
+    Vas: 0.10       # m^3
     Qms: 5.5
     Qes: 0.45
-    front_label: rad_front
-    back_label: rad_back
-
-  - type: PistonRadiator
-    label: rad_front
-    diameter: 0.26   # m
-    boundary: 4pi
-
-  - type: PistonRadiator
-    label: rad_back
-    diameter: 0.26   # m
-    boundary: 4pi
+    Re: 6.0
+    Le: 0.0
+    front_load: front_rad   # NOTE: current code expects front_load/back_load
+    back_load: back_rad
 
 network:
   series:
-    - driver1
+    - D1
 
-output:
-  spl:
-    - rad_front
-    - rad_back
+frequency:
+  min_hz: 20
+  max_hz: 20000
+  points: 800
+
+source:
+  volts_rms: 2.83
+  distance_m: 1.0
 
