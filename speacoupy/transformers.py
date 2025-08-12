@@ -13,8 +13,8 @@ class MechToElec(Element):
 	Bl: float
 	domain: ClassVar[Domain] = Domain.ELECTRICAL
 	def impedance(self, omega):
-	    Zm = self.load.impedance(omega)
-	    return (self.Bl**2) / Zm
+		Zm = self.load.impedance(omega)
+		return (self.Bl**2) / Zm
 
 @dataclass
 class AcToMech(Element):
@@ -22,5 +22,5 @@ class AcToMech(Element):
 	Sd: float
 	domain: ClassVar[Domain] = Domain.MECHANICAL
 	def impedance(self, omega):
-	    Za = self.load.impedance(omega)
-	    return (self.Sd**2) * Za
+		Za = self.load.impedance(omega)
+		return (self.Sd**2) * Za
