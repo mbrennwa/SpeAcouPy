@@ -7,6 +7,8 @@ elements:
   label: FREE_AIR_LOADING
   loading: 4pi
 - type: driver
+    front: front_rad
+    back: back_box
   label: woofer
   Re: 10
   Le: 0.00035

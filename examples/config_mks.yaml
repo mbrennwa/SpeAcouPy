@@ -10,6 +10,8 @@ elements:
   label: BL
   Vb: 0.018
 - type: driver
+    front: front_rad
+    back: back_box
   label: D1
   Re: 5.7
   Le: 0.00035

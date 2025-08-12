@@ -7,19 +7,19 @@ from .domains import Element, Domain
 
 @dataclass
 class Electrical(Element):
-    domain: ClassVar[Domain] = Domain.ELECTRICAL
+	domain: ClassVar[Domain] = Domain.ELECTRICAL
 
 @dataclass
 class Re(Electrical):
-    R: float = 0.0
-    def impedance(self, omega): return np.broadcast_to(self.R + 0j, omega.shape)
+	R: float = 0.0
+	def impedance(self, omega): return np.broadcast_to(self.R + 0j, omega.shape)
 
 @dataclass
 class Le(Electrical):
-    L: float = 0.0
-    def impedance(self, omega): return 1j * omega * self.L
+	L: float = 0.0
+	def impedance(self, omega): return 1j * omega * self.L
 
 @dataclass
 class Ce(Electrical):
-    C: float = 0.0
-    def impedance(self, omega): return 1/(1j * omega * self.C)
+	C: float = 0.0
+	def impedance(self, omega): return 1/(1j * omega * self.C)
