@@ -65,7 +65,7 @@ class VentedBox(Acoustic):
 		return 1/Y
 
 @dataclass
-class RadiationPistonWB(Acoustic):
+class RadiationPiston(Acoustic):
 	"""Wideband baffled circular piston radiation impedance.
 	Z = ρ0 c0 π a^2 * [ 1 - J1(2ka)/(k a) - j H1(2ka)/(k a) ]
 	A boundary factor k_b ∈ {1,2,4,8} scales R and X for 4π,2π,1π,1/2π respectively.
@@ -101,3 +101,21 @@ def piston_directivity(Sd: float, omega: np.ndarray, theta_rad: np.ndarray) -> n
 	den = np.where(x==0, 1.0, x)
 	D = num / den
 	return D
+
+class RadiationSpace:
+	"""Internal helper holding a boundary (4pi/2pi/1pi/1/2pi).
+	Not a YAML element. Used to treat 'radiation_space' like a normal element in code.
+	"""
+	def __init__(self, space: str = "4pi"):
+		space = (space or "4pi").strip().lower()
+		if space == "0.5pi":
+			space = "1/2pi"
+		if space not in {"4pi","2pi","1pi","1/2pi"}:
+			raise ValueError(f"Invalid radiation_space '{space}'.")
+		self.space = space
+
+	def make_piston(self, Sd: float):
+		return RadiationPiston(Sd=Sd, loading=self.space)
+
+	def __repr__(self):
+		return f"RadiationSpace({self.space})"
