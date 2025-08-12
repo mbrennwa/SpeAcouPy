@@ -1,0 +1,30 @@
+elements:
+  - type: Driver
+    label: driver1
+    Sd: 0.053        # m²
+    fs: 40           # Hz
+    Vas: 0.1         # m³
+    Qms: 5.5
+    Qes: 0.45
+    front_label: rad_front
+    back_label: rad_back
+
+  - type: PistonRadiator
+    label: rad_front
+    diameter: 0.26   # m
+    boundary: 4pi
+
+  - type: PistonRadiator
+    label: rad_back
+    diameter: 0.26   # m
+    boundary: 4pi
+
+network:
+  series:
+    - driver1
+
+output:
+  spl:
+    - rad_front
+    - rad_back
+
