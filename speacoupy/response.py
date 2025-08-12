@@ -25,6 +25,88 @@ def omega_logspace(fmin=10.0, fmax=20000.0, n=1000):
 	return f, 2*np.pi*f
 
 class ResponseSolver:
+
+	def _sum_radiators(self, omega, U, r, loading: str):
+		"""Split diaphragm flow into front/back and sum terminal radiators with correct polarity."""
+		# Constants
+		RHO0 = self.RHO0 if hasattr(self, "RHO0") else 1.204
+		# Equivalent loads seen by diaphragm
+		Zf = self.driver.motional.front_load.impedance(omega)
+		Zb = self.driver.motional.back_load.impedance(omega)
+		Zsum = Zf + Zb
+		Zsum = np.where(np.abs(Zsum) == 0, 1e-30, Zsum)
+
+		U_front_total = U * (Zb / Zsum)
+		U_back_total  = U * (Zf / Zsum)
+
+		front_rads = collect_radiators(self.driver.motional.front_load, +1)
+		back_rads  = collect_radiators(self.driver.motional.back_load, -1)
+
+		def _weights(rad_list):
+
+			if not rad_list:
+
+				return []
+
+			W = []
+
+			for _, el, _ in rad_list:
+
+				try:
+
+					Zr = el.Z_rad(omega) if hasattr(el, "Z_rad") else el.impedance(omega)
+
+				except Exception:
+
+					Zr = 1e30 + 0j
+
+				W.append(1.0/np.maximum(np.abs(Zr), 1e-30))
+
+			W = np.array(W, dtype=float)
+
+			S = np.sum(W)
+
+			if not np.isfinite(S) or S == 0:
+
+				W = np.ones(len(rad_list), dtype=float)
+
+				S = np.sum(W)
+
+			return (W / S)
+
+		Wf = _weights(front_rads)
+
+		Wb = _weights(back_rads)
+
+		k_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
+
+		k = k_map.get((loading or "4pi").lower(), 1.0)
+
+		p_total = np.zeros_like(omega, dtype=complex)
+
+		p_by_radiator = {}
+
+		for i, (lbl, el, pol) in enumerate(front_rads):
+
+			Ui = U_front_total * (Wf[i] if len(Wf) else 1.0)
+
+			pi = pol * k * (1j * omega * RHO0 * Ui) / (4*np.pi*r)
+
+			p_by_radiator[lbl] = pi
+
+			p_total += pi
+
+		for i, (lbl, el, pol) in enumerate(back_rads):
+
+			Ui = U_back_total * (Wb[i] if len(Wb) else 1.0)
+
+			pi = pol * k * (1j * omega * RHO0 * Ui) / (4*np.pi*r)
+
+			p_by_radiator[lbl] = pi
+
+			p_total += pi
+
+		return p_total, p_by_radiator
 	def __init__(self, series_net: Element, driver: Driver, Sd: float):
 		self.series = series_net
 		self.driver = driver
@@ -40,6 +122,9 @@ class ResponseSolver:
 		Zm = (self.driver.Bl**2) / (Zin_drv - Zvc)
 		v = (self.driver.Bl * Id) / Zm
 		U = v * self.Sd
+	
+		# General per-radiator summation
+		p_total, p_by_radiator = self._sum_radiators(omega, U, r, loading)
 
 		k_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
 		k = k_map.get((loading or "4pi").lower(), 1.0)
@@ -57,49 +142,3 @@ class ResponseSolver:
 		return ResponseResult(f=f, Zin=Z_total, Vd=Vd, Id=Id, v=v, U=U,
 							p_onaxis=p, SPL_onaxis=SPL,
 							angles_deg=angles_deg, SPL_offaxis=SPL_off)
-
-
-
-# For each driver -> run collect_radiators on front/back, sum SPL per CLI filter
-
-
-def solve(self, drivers, f, selected_radiators=None):
-	"""Solve system response for given drivers and frequency array."""
-	omega = 2 * np.pi * f
-	U_by_radiator = {}
-	p_by_radiator = {}
-
-	for drv in drivers:
-		# Front
-		if drv.front_load:
-			for lbl, rad, pol in collect_radiators(drv.front_load, +1):
-				U = rad.U(omega) * pol if hasattr(rad, 'U') else np.zeros_like(f, dtype=complex)
-				p = rad.p(omega) * pol if hasattr(rad, 'p') else np.zeros_like(f, dtype=complex)
-				U_by_radiator[lbl] = U_by_radiator.get(lbl, 0) + U
-				p_by_radiator[lbl] = p_by_radiator.get(lbl, 0) + p
-		# Back
-		if drv.back_load:
-			for lbl, rad, pol in collect_radiators(drv.back_load, -1):
-				U = rad.U(omega) * pol if hasattr(rad, 'U') else np.zeros_like(f, dtype=complex)
-				p = rad.p(omega) * pol if hasattr(rad, 'p') else np.zeros_like(f, dtype=complex)
-				U_by_radiator[lbl] = U_by_radiator.get(lbl, 0) + U
-				p_by_radiator[lbl] = p_by_radiator.get(lbl, 0) + p
-
-	# Default: sum all radiators
-	if not selected_radiators:
-		selected_radiators = list(p_by_radiator.keys())
-
-	p_total = np.zeros_like(f, dtype=complex)
-	for lbl in selected_radiators:
-		p_total += p_by_radiator[lbl]
-
-	# Convert to SPL (assuming 1 m ref distance and 20 µPa reference)
-	p_ref = 20e-6
-	SPL_total = 20 * np.log10(np.abs(p_total) / p_ref + 1e-20)
-
-	return {
-		'f': f,
-		'U_by_radiator': U_by_radiator,
-		'p_by_radiator': p_by_radiator,
-		'SPL_total': SPL_total
-	}
