@@ -1,11 +1,11 @@
 elements:
 
-  - type: RadiationPiston
+  - type: piston
     label: rad_front
     Sd: 0.014       # same as driver Sd
     loading: 4pi    # free space
 
-  - type: RadiationPiston
+  - type: piston
     label: rad_back
     Sd: 0.014
     loading: 4pi
@@ -17,8 +17,8 @@ elements:
     Qms: 5.0
     Qes: 0.5
     Sd: 0.014     # diaphragm area [m^2]
-    front: rad_front
-    back: rad_back
+    front_load: rad_front
+    back_load: rad_back
 
 network:
   series:
