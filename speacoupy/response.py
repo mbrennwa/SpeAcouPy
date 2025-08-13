@@ -26,6 +26,7 @@ def omega_logspace(fmin=10.0, fmax=20000.0, n=1000):
 
 class ResponseSolver:
 
+	# helper: sum radiation of terminal radiators
 	def _sum_radiators(self, omega, U, r, loading: str, include_labels=None):
 		"""Sum terminal radiators with correct signs; optional filtering by include_labels."""
 		include_set = set(include_labels) if include_labels else None

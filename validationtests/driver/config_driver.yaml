@@ -9,8 +9,8 @@ elements:
   Sd: 0.014
   front_load: radiation_space
   back_load: radiation_space
-  front_radiator_label: front_rad
-  back_radiator_label: back_rad
+  front_radiator_label: driver_front
+  back_radiator_label: driver_back
 network:
   series:
   - Faital12PR320
