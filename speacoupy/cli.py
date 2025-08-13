@@ -13,7 +13,7 @@ from . import (
 from .plotting import plot_spl, plot_impedance, plot_spl_multi
 from .response import ResponseSolver
 
-from .constants import PROGRAMNAME
+from .constants import PROGRAMNAME, FARFIELD_DIST_M
 
 from math import log
 import numpy as np
@@ -331,7 +331,7 @@ def build_system(cfg: dict):
 	net = build_net(net_spec, reg)
 
 	Vsrc = float(cfg.get("source", {}).get("volts_rms", 2.83))
-	r = float(cfg.get("source", {}).get("distance_m", 1.0))
+	r = FARFIELD_DIST_M
 	angles = cfg.get("angles_deg")
 	angles = np.array(angles, dtype=float) if angles else None
 
