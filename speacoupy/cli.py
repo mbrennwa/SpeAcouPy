@@ -3,6 +3,7 @@ import argparse, os
 from typing import Any, Dict
 import numpy as np
 import yaml
+from pathlib import Path
 
 from . import (
 	omega_logspace, Net, Series, Parallel,
@@ -219,7 +220,7 @@ def build_system(cfg: dict):
 def main(argv=None):
 	parser = argparse.ArgumentParser(prog='speacoupy', description="SpeAcouPy: MKS driver inputs (Sd, fs, Vas, Qms, Qes)")
 	parser.add_argument("config", help="YAML config file")
-	parser.add_argument("--outdir", default="plots", help="Output directory for plots")
+	parser.add_argument("--outdir", default=str(Path.cwd()), help="Output directory for plots")
 	parser.add_argument("--prefix", default="", help="Filename prefix")
 	args = parser.parse_args(argv)
 
@@ -230,21 +231,21 @@ def main(argv=None):
 	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles)
 
 	os.makedirs(args.outdir, exist_ok=True)
-	tag = loading_label.replace("/", "")
+	### tag = loading_label.replace("/", "")
 	pre = (args.prefix + "_") if args.prefix else ""
 
-	plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}spl_{tag}.png"),
-				title=f"On-axis SPL (1 m) [{loading_label}]")
-	plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}impedance_{tag}.png"),
-				title=f"Input Impedance Magnitude [{loading_label}]")
+	plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.png"),
+				title=f"On-axis SPL (1 m / {loading_label})")
+	plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.png"),
+				title=f"Input Impedance Magnitude")
 	if res.SPL_offaxis is not None and res.angles_deg is not None:
 		curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
 		labels = [f"{ang:.0f}°" for ang in res.angles_deg]
 		from .plotting import plot_spl_multi
 		plot_spl_multi(res.f, curves, labels,
-					outfile=os.path.join(args.outdir, f"{pre}spl_angles_{tag}.png"),
-					title=f"SPL vs angle [{loading_label}]")
-	print(f"Wrote plots to {args.outdir}/ with loading tag [{loading_label}]")
+					outfile=os.path.join(args.outdir, f"{pre}SPL_angles.png"),
+					title=f"SPL vs angle (1 m / {loading_label})")
+	print(f"Wrote plots to {args.outdir}/")
 	return 0
 
 if __name__ == "__main__":
