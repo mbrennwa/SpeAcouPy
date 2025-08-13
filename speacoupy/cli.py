@@ -127,6 +127,12 @@ def build_registry(cfg: dict):
 			Bl=Bl,
 			motional=mot,
 		)
+		# Propagate driver-embedded radiator labels from YAML onto Driver object
+		if isinstance(e, dict):
+			if 'front_radiator_label' in e:
+				setattr(drv, 'front_radiator_label', e['front_radiator_label'])
+			if 'back_radiator_label' in e:
+				setattr(drv, 'back_radiator_label', e['back_radiator_label'])
 		reg[lab] = drv
 
 	# Find exactly one driver
@@ -186,6 +192,20 @@ def build_system(cfg: dict):
 		raise ValueError("No driver found in registry.")
 	Sd_drv = drv.motional.Sd
 	if isinstance(drv.motional.front_load, str) and drv.motional.front_load == 'radiation_space':
+		fr_lab = getattr(drv, 'front_radiator_label', None)
+		if not isinstance(fr_lab, str) or not fr_lab.strip():
+			raise ValueError("Driver must provide 'front_radiator_label' when front_load is 'radiation_space'.")
+		p = RadiationPiston(Sd=Sd_drv, loading=global_space)
+		setattr(p, 'label', fr_lab)
+		drv.motional.front_load = p
+	if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiation_space':
+		br_lab = getattr(drv, 'back_radiator_label', None)
+		if not isinstance(br_lab, str) or not br_lab.strip():
+			raise ValueError("Driver must provide 'back_radiator_label' when back_load is 'radiation_space'.")
+		p = RadiationPiston(Sd=Sd_drv, loading=global_space)
+		setattr(p, 'label', br_lab)
+		drv.motional.back_load = p
+	if isinstance(drv.motional.front_load, str) and drv.motional.front_load == 'radiation_space':
 		drv.motional.front_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
 	if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiation_space':
 		drv.motional.back_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
@@ -223,6 +243,8 @@ def build_system(cfg: dict):
 def main(argv=None):
 	parser = argparse.ArgumentParser(prog='speacoupy', description=f"{PROGRAMNAME}: Simulation of loudspeaker systems using networks of electro-mechano-acoustical elements")
 	parser.add_argument("config", help="YAML config file")
+	parser.add_argument('--radiators', nargs='+', default=None,
+		help='Terminal radiator labels to include in SPL (must match labeled terminal radiators in config)')
 	parser.add_argument("--outdir", default=str(Path.cwd()), help="Output directory for plots")
 	parser.add_argument("--prefix", default="", help="Filename prefix")
 	args = parser.parse_args(argv)
@@ -231,7 +253,7 @@ def main(argv=None):
 	f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
 
 	solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
-	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles)
+	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles, include_radiators=args.radiators)
 
 	os.makedirs(args.outdir, exist_ok=True)
 	### tag = loading_label.replace("/", "")
