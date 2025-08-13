@@ -5,14 +5,15 @@ import matplotlib.pyplot as plt
 
 from .constants import PROGRAMNAME
 
-def __branding(ax):
 
-	# Add text at bottom right (slightly inset)
+def __branding(ax):
 	ax.text(
-	    0.99, 0.01, PROGRAMNAME,
-	    transform=ax.transAxes,  # position in axes fraction coordinates
-	    ha="right", va="bottom", # align text properly
-	    color="gray"
+		0.99, 0.01, PROGRAMNAME,
+		transform=ax.transAxes,       # position in axes fraction coordinates
+		ha="right", va="bottom",      # align text properly
+		color="gray",
+		bbox=dict(facecolor="white", edgecolor="none", pad=2.0),
+		zorder=10                     # ensure it's drawn on top
 	)
 
 
