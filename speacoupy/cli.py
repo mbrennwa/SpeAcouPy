@@ -18,26 +18,86 @@ from .constants import PROGRAMNAME
 from math import log
 import numpy as np
 
-def fit_semi_inductance(points, Re):
-	"""Fit k and alpha from abs(Z) points and Re.
-	points: list of [f_hz, Zabs_ohm].
-	Returns (k, alpha). Requires >=2 valid points with Zabs>Re.
+
+
+def fit_semi_inductance(points, Re, Bl, Rms, Mms, Cms):
+	"""Direct total-magnitude fit: find k>=0, 0<alpha<=1 minimizing
+	   sum_i (log| Re + k*(j*omega_i)^alpha + (Bl^2)/Zm(omega_i) | - log|Z_meas,i|)^2
+	No phase data required.
 	"""
 	TWOPI = 2.0 * np.pi
-	w = []
-	y = []
+	# Prepare arrays
+	freq = []
+	Zmeas = []
 	for f, Zabs in points:
 		f = float(f); Zabs = float(Zabs)
-		if Zabs <= Re: 
-			continue
-		w.append(np.log(TWOPI*f))
-		y.append(np.log(Zabs - Re))
-	if len(w) < 2:
-		raise ValueError("Need at least two HF points with |Z| > Re to fit lossy inductor.")
-	w = np.array(w); y = np.array(y)
-	A = np.vstack([w, np.ones_like(w)]).T
-	alpha, logk = np.linalg.lstsq(A, y, rcond=None)[0]
-	k = np.exp(logk)
+		if Zabs > 0:
+			freq.append(f); Zmeas.append(Zabs)
+	if len(freq) < 2:
+		raise ValueError("Need at least two valid Z_hf points.")
+	freq = np.array(freq, dtype=float)
+	omega = TWOPI * freq
+	Zmeas = np.array(Zmeas, dtype=float)
+	# Motional complex term
+	Zm = (Rms + 0j) + 1j*omega*Mms + 1.0/(1j*omega*Cms)
+	Zmot = (Bl**2) / Zm
+	# Search over alpha and k (1D inner search per alpha)
+	def sse_for(k, alpha):
+		Zhf = k * (1j*omega)**alpha
+		Ztot = Re + Zhf + Zmot
+		mag = np.abs(Ztot)
+		return float(np.sum((np.log(mag) - np.log(Zmeas))**2))
+	# Reasonable k bounds from data at highest frequency
+	mag_resid = np.maximum(Zmeas - Re - np.abs(Zmot), 1e-9)
+	wmax = float(np.max(omega))
+	# k upper bound so that k*wmax^alpha is on the order of max residual
+	def k_bounds(alpha):
+		base = np.max(mag_resid)
+		if base <= 0:
+			base = np.max(Zmeas)
+		kmax = base / (wmax**alpha + 1e-30)
+		kmax = max(kmax, 1e-9)
+		return (0.0, kmax*10.0)
+	# Golden section 1D minimizer
+	phi = 0.5 * (1 + 5**0.5)
+	def minimize_k(alpha):
+		lo, hi = k_bounds(alpha)
+		# initialize interior points
+		c = hi - (hi - lo)/phi
+		d = lo + (hi - lo)/phi
+		fc = sse_for(c, alpha)
+		fd = sse_for(d, alpha)
+		for _ in range(60):
+			if fc > fd:
+				lo = c
+				c = d
+				fc = fd
+				d = lo + (hi - lo)/phi
+				fd = sse_for(d, alpha)
+			else:
+				hi = d
+				d = c
+				fd = fc
+				c = hi - (hi - lo)/phi
+				fc = sse_for(c, alpha)
+			if abs(hi - lo) <= 1e-12:
+				break
+		k_opt = (lo + hi)/2
+		return k_opt, sse_for(k_opt, alpha)
+	best = (None, None, float('inf'))  # (k, alpha, sse)
+	# Coarse-to-fine alpha search
+	for alpha in np.linspace(0.25, 1.0, 31):  # coarse
+		k_opt, sse = minimize_k(alpha)
+		if sse < best[2]:
+			best = (k_opt, float(alpha), float(sse))
+	# local refine around best alpha
+	acenter = best[1]
+	agrid = np.linspace(max(0.1, acenter-0.1), min(1.0, acenter+0.1), 21)
+	for alpha in agrid:
+		k_opt, sse = minimize_k(alpha)
+		if sse < best[2]:
+			best = (k_opt, float(alpha), float(sse))
+	k, alpha = best[0], best[1]
 	return float(k), float(alpha)
 
 
@@ -157,7 +217,7 @@ def build_registry(cfg: dict):
 				pts_norm.append([float(item.get('f_hz')), float(item.get('Z_ohm'))])
 			else:
 				raise ValueError("Invalid Z_hf point format: %r" % (item,))
-		k_semi, alpha_semi = fit_semi_inductance(pts_norm, Re_val)
+		k_semi, alpha_semi = fit_semi_inductance(pts_norm, Re_val, Bl, Rms, Mms, Cms)
 		drv = Driver(
 			Re_val=Re_val,
 			k_semi=k_semi,
