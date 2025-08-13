@@ -13,6 +13,9 @@ from . import (
 from .plotting import plot_spl, plot_impedance, plot_spl_multi
 from .response import ResponseSolver
 
+from .constants import PROGRAMNAME
+
+
 # ---------------- YAML ----------------
 def load_config(path: str) -> dict:
 	with open(path, "r", encoding="utf-8") as f:
@@ -218,7 +221,7 @@ def build_system(cfg: dict):
 	return f, w, net, drv, drv.motional.Sd, Vsrc, r, loading_label, angles
 
 def main(argv=None):
-	parser = argparse.ArgumentParser(prog='speacoupy', description="SpeAcouPy: MKS driver inputs (Sd, fs, Vas, Qms, Qes)")
+	parser = argparse.ArgumentParser(prog='speacoupy', description=f"{PROGRAMNAME}: Simulation of loudspeaker systems using networks of electro-mechano-acoustical elements")
 	parser.add_argument("config", help="YAML config file")
 	parser.add_argument("--outdir", default=str(Path.cwd()), help="Output directory for plots")
 	parser.add_argument("--prefix", default="", help="Filename prefix")

@@ -7,9 +7,7 @@ from scipy.special import j1, struve  # wideband piston needs Bessel/Struve
 from .domains import Element, Domain
 
 # Physical constants (room temp)
-RHO0 = 1.2041      # air density [kg/m^3]
-C0   = 343.0       # speed of sound [m/s]
-P0   = 20e-6       # reference pressure [Pa]
+from .constants import RHO0, C0, P0
 
 @dataclass
 class Acoustic(Element):
