@@ -21,7 +21,7 @@ network:
 
 frequency:
   min_hz: 20
-  max_hz: 20000
+  max_hz: 5000
   points: 800
 
 source:
