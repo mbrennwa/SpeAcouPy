@@ -27,7 +27,8 @@ class DriverMechanicalBranch:
 @dataclass
 class Driver(Element):
 	Re_val: float
-	Le_val: float
+	k_semi: float
+	alpha_semi: float
 	Bl: float
 	motional: DriverMechanicalBranch
 	domain: ClassVar[Domain] = Domain.ELECTRICAL
@@ -38,7 +39,8 @@ class Driver(Element):
 		return Zvc + Ze_mot
 		
 	def impedance_voicecoil(self, omega):
-		return self.Re_val + 1j*omega*self.Le_val
+		# Semi-inductance (lossy inductor) model: Z = Re + k*(j*omega)^alpha
+		return self.Re_val + self.k_semi * (1j*omega)**(self.alpha_semi)
 		
 	def Sd(self):
 		return self.motional.Sd

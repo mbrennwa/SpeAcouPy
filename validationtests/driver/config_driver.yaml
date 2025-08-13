@@ -9,16 +9,20 @@ elements:
   Sd: 0.014
   front_load: radiation_space
   back_load: radiation_space
-  front_radiator_label: driver_front
-  back_radiator_label: driver_back
+  front_radiator_label: front_rad
+  back_radiator_label: back_rad
+  Re: 6.0
+  Z_hf: [ [1016,11.7] , [3008,18.3] , [5000,24.1] ]
+
 network:
   series:
   - Faital12PR320
+
 frequency:
   min_hz: 20
   max_hz: 20000
   points: 800
+
 source:
   volts_rms: 2.83
   distance_m: 1.0
-

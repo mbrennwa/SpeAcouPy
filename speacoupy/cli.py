@@ -15,6 +15,31 @@ from .response import ResponseSolver
 
 from .constants import PROGRAMNAME
 
+from math import log
+import numpy as np
+
+def fit_semi_inductance(points, Re):
+	"""Fit k and alpha from abs(Z) points and Re.
+	points: list of [f_hz, Zabs_ohm].
+	Returns (k, alpha). Requires >=2 valid points with Zabs>Re.
+	"""
+	TWOPI = 2.0 * np.pi
+	w = []
+	y = []
+	for f, Zabs in points:
+		f = float(f); Zabs = float(Zabs)
+		if Zabs <= Re: 
+			continue
+		w.append(np.log(TWOPI*f))
+		y.append(np.log(Zabs - Re))
+	if len(w) < 2:
+		raise ValueError("Need at least two HF points with |Z| > Re to fit lossy inductor.")
+	w = np.array(w); y = np.array(y)
+	A = np.vstack([w, np.ones_like(w)]).T
+	alpha, logk = np.linalg.lstsq(A, y, rcond=None)[0]
+	k = np.exp(logk)
+	return float(k), float(alpha)
+
 
 # ---------------- YAML ----------------
 def load_config(path: str) -> dict:
@@ -90,7 +115,6 @@ def build_registry(cfg: dict):
 		Qms = float(e["Qms"])
 		Qes = float(e["Qes"])
 		Re_val = float(e.get("Re", 6.0))
-		Le_val = float(e.get("Le", 0.0))
 
 		front_lab = e.get("front_load")
 		back_lab  = e.get("back_load")
@@ -121,9 +145,23 @@ def build_registry(cfg: dict):
 			back_load=back_load_obj,
 			Sd=Sd,
 		)
+		pts = e.get('Z_hf')
+		if not pts:
+			raise ValueError("Driver '%s' must provide Z_hf with at least two [f_hz, Zabs] pairs" % lab)
+		# normalize points
+		pts_norm = []
+		for item in pts:
+			if isinstance(item, (list, tuple)) and len(item)>=2:
+				pts_norm.append([float(item[0]), float(item[1])])
+			elif isinstance(item, dict):
+				pts_norm.append([float(item.get('f_hz')), float(item.get('Z_ohm'))])
+			else:
+				raise ValueError("Invalid Z_hf point format: %r" % (item,))
+		k_semi, alpha_semi = fit_semi_inductance(pts_norm, Re_val)
 		drv = Driver(
 			Re_val=Re_val,
-			Le_val=Le_val,
+			k_semi=k_semi,
+			alpha_semi=alpha_semi,
 			Bl=Bl,
 			motional=mot,
 		)
