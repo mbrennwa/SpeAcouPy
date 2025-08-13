@@ -1,4 +1,5 @@
-radiation_space: 4pi
+radiation_space: 2pi
+
 elements:
 - type: driver
   label: Faital12PR320
@@ -17,10 +18,12 @@ elements:
 network:
   series:
   - Faital12PR320
+
 frequency:
   min_hz: 20
   max_hz: 20000
   points: 800
+
 source:
   volts_rms: 2.83
   distance_m: 1.0
