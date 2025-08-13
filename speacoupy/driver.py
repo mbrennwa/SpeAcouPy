@@ -16,6 +16,7 @@ class DriverMechanicalBranch:
 	back_load: Optional[Acoustic] = None
 	Sd: float = 1.0
 	domain: ClassVar[Domain] = Domain.MECHANICAL
+	
 	def impedance(self, omega):
 		Zm = (self.Rms_val + 0j) + 1j*omega*self.Mms_val + 1/(1j*omega*self.Cms_val)
 		if self.front_load is None or self.back_load is None:
@@ -30,7 +31,14 @@ class Driver(Element):
 	Bl: float
 	motional: DriverMechanicalBranch
 	domain: ClassVar[Domain] = Domain.ELECTRICAL
+	
 	def impedance(self, omega):
-		Zvc = self.Re_val + 1j*omega*self.Le_val
+		Zvc = self.impedance_voicecoil(omega)
 		Ze_mot = (self.Bl**2) / self.motional.impedance(omega)
 		return Zvc + Ze_mot
+		
+	def impedance_voicecoil(self, omega):
+		return self.Re_val + 1j*omega*self.Le_val
+		
+	def Sd(self):
+		return self.motional.Sd

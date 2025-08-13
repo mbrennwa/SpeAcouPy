@@ -228,7 +228,7 @@ def main(argv=None):
 	args = parser.parse_args(argv)
 
 	cfg = load_config(args.config)
-	f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)
+	f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
 
 	solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
 	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles)

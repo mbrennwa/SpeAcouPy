@@ -29,7 +29,8 @@ class ResponseSolver:
 	def _sum_radiators(self, omega, U, r, loading: str):
 		"""Split diaphragm flow into front/back and sum terminal radiators with correct polarity."""
 		# Constants
-		RHO0 = self.RHO0 if hasattr(self, "RHO0") else 1.204
+		#### NJET!! RHO0 = self.RHO0 if hasattr(self, "RHO0") else 1.204
+		
 		# Equivalent loads seen by diaphragm
 		Zf = self.driver.motional.front_load.impedance(omega)
 		Zb = self.driver.motional.back_load.impedance(omega)
@@ -75,53 +76,48 @@ class ResponseSolver:
 			return (W / S)
 
 		Wf = _weights(front_rads)
-
 		Wb = _weights(back_rads)
 
 		k_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
-
 		k = k_map.get((loading or "4pi").lower(), 1.0)
 
 		p_total = np.zeros_like(omega, dtype=complex)
-
 		p_by_radiator = {}
 
 		for i, (lbl, el, pol) in enumerate(front_rads):
 
 			Ui = U_front_total * (Wf[i] if len(Wf) else 1.0)
-
 			pi = pol * k * (1j * omega * RHO0 * Ui) / (4*np.pi*r)
-
 			p_by_radiator[lbl] = pi
-
 			p_total += pi
 
 		for i, (lbl, el, pol) in enumerate(back_rads):
 
 			Ui = U_back_total * (Wb[i] if len(Wb) else 1.0)
-
 			pi = pol * k * (1j * omega * RHO0 * Ui) / (4*np.pi*r)
-
 			p_by_radiator[lbl] = pi
-
 			p_total += pi
 
 		return p_total, p_by_radiator
 	def __init__(self, series_net: Element, driver: Driver, Sd: float):
 		self.series = series_net
 		self.driver = driver
-		self.Sd = Sd
+		
 	def solve(self, omega: np.ndarray, V_source: float = 2.83, r: float = 1.0,
 			loading: str = "4pi", angles_deg: np.ndarray | None = None) -> ResponseResult:
-		Z_total = self.series.impedance(omega)
-		Z_driver = self.driver.impedance(omega)
-		Vd = V_source * (Z_driver / Z_total)
-		Id = Vd / Z_driver
-		Zvc = self.driver.Re_val + 1j*omega*self.driver.Le_val
-		Zin_drv = Z_driver
-		Zm = (self.driver.Bl**2) / (Zin_drv - Zvc)
-		v = (self.driver.Bl * Id) / Zm
-		U = v * self.Sd
+			
+			
+		print('**** the solver needs careful checking!!! especially the _sum_radiators(...) thing is unclear to me!')
+			
+			
+		Z_total = self.series.impedance(omega)			# total system el. impedance
+		Z_driver = self.driver.impedance(omega)			# driver el. impedance (total impedance)
+		Vd = V_source * (Z_driver / Z_total)			# voltage at driver terminals
+		Id = Vd / Z_driver 					# driver motor current
+		Zvc = self.driver.impedance_voicecoil(omega)		# driver voice-coil impedance (without motional part)
+		Zm = (self.driver.Bl**2) / (Z_driver - Zvc)		# motional mech. impedance
+		v = (self.driver.Bl * Id) / Zm				# cone velocity
+		U = v * self.driver.Sd()				# volume flow at (front of) driver cone
 	
 		# General per-radiator summation
 		p_total, p_by_radiator = self._sum_radiators(omega, U, r, loading)
@@ -135,7 +131,8 @@ class ResponseSolver:
 		SPL_off = None
 		if angles_deg is not None and angles_deg.size > 0:
 			th = np.deg2rad(angles_deg)
-			D = piston_directivity(self.Sd, omega, th)  # shape (n_angles, n_freq)
+			### D = piston_directivity(self.Sd, omega, th)  # shape (n_angles, n_freq)
+			D = piston_directivity(self.driver.Sd(), omega, th)  # shape (n_angles, n_freq)
 			p_ang = (D * p.reshape((1,-1)))
 			SPL_off = 20*np.log10(np.maximum(np.abs(p_ang), 1e-16) / P0)
 
