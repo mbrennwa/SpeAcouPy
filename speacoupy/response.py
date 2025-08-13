@@ -7,6 +7,8 @@ from .domains import Element
 from .driver import Driver
 from .acoustic import RHO0, P0, piston_directivity
 
+from .transformers import ElecToMech
+
 @dataclass
 class ResponseResult:
 	f: np.ndarray
@@ -115,12 +117,32 @@ class ResponseSolver:
 		Vd = V_source * (Z_driver / Z_total)			# voltage at driver terminals
 		Id = Vd / Z_driver 					# driver motor current
 		Zvc = self.driver.impedance_voicecoil(omega)		# driver voice-coil impedance (without motional part)
-		Zm = (self.driver.Bl**2) / (Z_driver - Zvc)		# motional mech. impedance
+		Zm = (self.driver.Bl**2) / (Z_driver - Zvc)		# motional impedance in mechanical domain
 		v = (self.driver.Bl * Id) / Zm				# cone velocity
 		U = v * self.driver.Sd()				# volume flow at (front of) driver cone
+
+
+
+
+
+
+
+
+
 	
 		# General per-radiator summation
+		print('**** The code inside _sum_radiators(...) needs a good look -- is it too complicated for what it needs to do?')		
 		p_total, p_by_radiator = self._sum_radiators(omega, U, r, loading)
+		
+		
+		
+		
+		
+		
+		
+		
+		
+		
 
 		k_map = {"4pi": 1.0, "2pi": 2.0, "1pi": 4.0, "1/2pi": 8.0, "0.5pi": 8.0}
 		k = k_map.get((loading or "4pi").lower(), 1.0)
