@@ -23,7 +23,7 @@ faital_msr = pd.read_csv("Faital_12PR320_impedance.txt", sep=r"\s+", comment="#"
 # plot impedance curves and save to PDF:
 plt.figure()
 plt.plot(faital_sim["Frequency (Hz)"], faital_sim["Impedance Magnitude (Ω)"], label="SpeAcouPy simulation")
-plt.plot(faital_msr[0], faital_msr[1], label="Measured")
+plt.plot(faital_msr[0], faital_msr[1], label="Measured", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Impedance (Ohm)")
 plt.title("Impedance Faital 12PR320")
