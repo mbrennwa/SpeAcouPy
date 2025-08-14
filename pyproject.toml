@@ -9,7 +9,7 @@ version = "0.5.1"
 description = "Loudspeaker Electro-Mechanical-Acoustical Modelling in Python"
 authors = [{name="You"}]
 requires-python = ">=3.9"
-dependencies = ["numpy", "matplotlib", "pyyaml", "scipy"]
+dependencies = ["numpy", "matplotlib", "pyyaml", "scipy", "pandas", "pytz"]
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
 

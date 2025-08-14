@@ -12,6 +12,64 @@ from . import (
 )
 from .plotting import plot_spl, plot_impedance, plot_spl_multi
 from .response import ResponseSolver
+import pandas as pd
+from .constants import PROGRAMNAME
+import datetime, pytz, csv
+
+def _get_version_from_pyproject() -> str:
+	try:
+		from importlib.resources import files
+		pyproj = files(__package__).joinpath("../pyproject.toml")
+		text = pyproj.read_text(encoding="utf-8")
+		import re
+		m = re.search(r'^version\s*=\s*"(.*?)"\s*$', text, re.M)
+		return m.group(1) if m else "unknown"
+	except Exception:
+		return "unknown"
+def write_response_csv(res, outdir: str, pre: str, loading_label: str):
+	outpath = os.path.join(outdir, f"{pre}DATA.csv")
+	# Build columns
+	data = {
+		"frequency_hz": res.f,
+		"Zin_mag_ohm": np.abs(res.Zin),
+		"Zin_phase_deg": ((np.rad2deg(np.unwrap(np.angle(res.Zin))) + 180.0) % 360.0) - 180.0,
+		"SPL_onaxis_db": res.SPL_onaxis,
+	}
+	# Off-axis SPL if present
+	if getattr(res, "SPL_offaxis", None) is not None and getattr(res, "angles_deg", None) is not None:
+		# Ensure deterministic order by sorting by angle
+		try:
+			pairs = sorted(zip(res.angles_deg, res.SPL_offaxis), key=lambda p: p[0])
+			for ang, arr in pairs:
+				col = f"SPL_deg_{int(round(float(ang)))}_db"
+				data[col] = arr
+		except Exception:
+			# fallback naive order
+			for i, arr in enumerate(res.SPL_offaxis):
+				data[f"SPL_offaxis_{i}_db"] = arr
+	df = pd.DataFrame(data)
+	# Rename primary columns to requested headers
+	mapping = {
+		"frequency_hz": "Frequency (Hz)",
+		"Zin_mag_ohm": "Impedance Magnitude (Ω)",
+		"Zin_phase_deg": "Impedance Phase (degrees)",
+		"SPL_onaxis_db": f"SPL (dB-SPL @ 1m / {loading_label})",
+	}
+	df.rename(columns=mapping, inplace=True)
+	# Header lines
+	tz = pytz.timezone("Europe/Zurich")
+	timestamp = datetime.datetime.now(tz).isoformat()
+	version = _get_version_from_pyproject()
+	header_lines = [
+		f"# Program: {PROGRAMNAME}",
+		f"# Version: {version}",
+		f"# Generated: {timestamp}",
+	]
+	with open(outpath, "w", encoding="utf-8") as f:
+		for line in header_lines:
+			f.write(line + "\n")
+	df.to_csv(outpath, mode="a", index=False, quoting=csv.QUOTE_NONE, escapechar="\\")
+
 
 from .constants import PROGRAMNAME, FARFIELD_DIST_M
 
@@ -22,7 +80,7 @@ import numpy as np
 
 def fit_semi_inductance(points, Re, Bl, Rms, Mms, Cms):
 	"""Direct total-magnitude fit: find k>=0, 0<alpha<=1 minimizing
-	   sum_i (log| Re + k*(j*omega_i)^alpha + (Bl^2)/Zm(omega_i) | - log|Z_meas,i|)^2
+		sum_i (log| Re + k*(j*omega_i)^alpha + (Bl^2)/Zm(omega_i) | - log|Z_meas,i|)^2
 	No phase data required.
 	"""
 	TWOPI = 2.0 * np.pi
@@ -345,7 +403,12 @@ def main(argv=None):
 		help='Terminal radiator labels to include in SPL (must match labeled terminal radiators in config)')
 	parser.add_argument("--outdir", default=str(Path.cwd()), help="Output directory for plots")
 	parser.add_argument("--prefix", default="", help="Filename prefix")
+	parser.add_argument("--png", action="store_true", help="Write PNG plots")
+	parser.add_argument("--pdf", action="store_true", help="Write PDF plots")
+	parser.add_argument("--csv", action="store_true", help="Write combined CSV data file")
 	args = parser.parse_args(argv)
+	if not (args.png or args.pdf or args.csv):
+		parser.error("You must specify at least one output format: --png, --pdf, --csv")
 
 	cfg = load_config(args.config)
 	f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
@@ -357,18 +420,25 @@ def main(argv=None):
 	### tag = loading_label.replace("/", "")
 	pre = (args.prefix + "_") if args.prefix else ""
 
-	plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.png"),
-				title=f"On-axis SPL (1 m / {loading_label})")
-	plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.png"),
-				title=f"Input Impedance Magnitude")
-	if res.SPL_offaxis is not None and res.angles_deg is not None:
-		curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
-		labels = [f"{ang:.0f}°" for ang in res.angles_deg]
-		from .plotting import plot_spl_multi
-		plot_spl_multi(res.f, curves, labels,
-					outfile=os.path.join(args.outdir, f"{pre}SPL_angles.png"),
-					title=f"SPL vs angle (1 m / {loading_label})")
-	print(f"Wrote plots to {args.outdir}/")
+	outputs = []
+	for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
+		if enabled:
+			plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
+					title=f"On-axis SPL (1 m / {loading_label})")
+			plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"),
+						title=f"Input Impedance")
+			if res.SPL_offaxis is not None and res.angles_deg is not None:
+				curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
+				labels = [f"{ang:.0f}°" for ang in res.angles_deg]
+				plot_spl_multi(res.f, curves, labels,
+							outfile=os.path.join(args.outdir, f"{pre}SPL_angles.{fmt}"),
+							title=f"SPL vs angle (1 m / {loading_label})")
+			outputs.append(fmt.upper())
+	# CSV output
+	if args.csv:
+		write_response_csv(res, args.outdir, pre, loading_label)
+		outputs.append("CSV")
+	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/')
 	return 0
 
 if __name__ == "__main__":
