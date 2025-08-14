@@ -425,8 +425,7 @@ def main(argv=None):
 		if enabled:
 			plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
 					title=f"On-axis SPL (1 m / {loading_label})")
-			plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"),
-						title=f"Input Impedance")
+			plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"))
 			if res.SPL_offaxis is not None and res.angles_deg is not None:
 				curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
 				labels = [f"{ang:.0f}°" for ang in res.angles_deg]

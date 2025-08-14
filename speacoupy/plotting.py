@@ -27,7 +27,7 @@ def plot_spl(f: np.ndarray, spl_db: np.ndarray, outfile: str | None = None, titl
 		fig.savefig(outfile, bbox_inches="tight", dpi=150)
 	return fig
 
-def plot_impedance(f: np.ndarray, Zin: np.ndarray, outfile: str | None = None, title: str = "Input Impedance"):
+def plot_impedance(f: np.ndarray, Zin: np.ndarray, outfile: str | None = None, title: str = "Impedance"):
 	"""Plot impedance magnitude with phase overlay on a twin y-axis."""
 	mag = np.abs(Zin)
 	# phase wrapped to [-180, 180)
@@ -36,22 +36,23 @@ def plot_impedance(f: np.ndarray, Zin: np.ndarray, outfile: str | None = None, t
 
 	fig = plt.figure()
 	ax1 = fig.add_subplot(111)
-	line1, = ax1.semilogx(f, mag, label="|Z| (Ω)")
+	line1, = ax1.semilogx(f, mag)
 	ax1.set_xlabel("Frequency (Hz)")
 	ax1.set_ylabel("Magnitude (Ω)")
 	ax1.grid(True, which="both", ls=":")
 	ax1.set_title(title)
 
 	ax2 = ax1.twinx()
-	line2, = ax2.semilogx(f, phase_wrapped, linestyle="--", label="∠Z (°)")
+	line2, = ax2.semilogx(f, phase_wrapped, linestyle="--")
 	ax2.set_ylabel("Phase (degrees)")
-	ax2.set_ylim(-200, 200)
+	ax2.set_ylim(-180, 180)
 	ax2.set_yticks([-180, -90, 0, 90, 180])
 	ax2.set_yticks([-180, -90, 0, 90, 180])
 
 	# Combined legend
 	lines = [line1, line2]
 	labels = [l.get_label() for l in lines]
+	ax1.legend([line1, line2], ["Magnitude", "Phase"], loc='upper right')
 
 	__branding(ax1)
 	if outfile:
