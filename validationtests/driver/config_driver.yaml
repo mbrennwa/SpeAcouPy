@@ -1,4 +1,5 @@
 radiation_space: 2pi
+
 elements:
 - type: driver
   label: Faital12PR320
@@ -12,23 +13,15 @@ elements:
   front_radiator_label: driver_front
   back_radiator_label: driver_back
   Re: 6.0
-  Z_hf:
-  - - 508
-    - 9.37
-  - - 1016
-    - 11.7
-  - - 2031
-    - 15.05
-  - - 4062
-    - 21.36
-  - - 8123
-    - 32.05
+  Z_hf: [ [508,9.37] , [1016,11.7] , [2031,15.05] , [4062,21.36] , [8123,32.05] ]
+
 network:
   series:
   - Faital12PR320
 frequency:
   min_hz: 20
   max_hz: 5000
-  points: 800
+  points: 300
+
 source:
   volts_rms: 2.83
