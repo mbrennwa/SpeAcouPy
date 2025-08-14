@@ -10,6 +10,7 @@ subprocess.run([
     "config_driver.yaml",
     "--radiators", "driver_front",
     "--csv",
+    "--pdf",
     "--prefix", "SpeAcouPy_output_"
 ])
 
