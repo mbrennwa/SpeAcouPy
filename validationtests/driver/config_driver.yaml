@@ -8,10 +8,10 @@ elements:
 - type: driver
   label: Faital12PR320
   fs: 40.1
-  Vas: 0.05
+  Vas: 0.1133
   Qms: 11
   Qes: 0.42
-  Sd: 0.489
+  Sd: 0.0539
   Re: 5.4
   Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [ 10238,29.4] , [ 20000,44.21] ]
   front_load: radiation_space
