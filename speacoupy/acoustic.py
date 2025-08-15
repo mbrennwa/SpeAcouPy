@@ -66,9 +66,10 @@ class Port(Acoustic):
 @dataclass
 class VentedBox(Acoustic):
 	Vb: float
+	Rb: float # see SealedBox
 	port: Port
 	def impedance(self, omega):
-		Z_box = SealedBox(self.Vb).impedance(omega)
+		Z_box = SealedBox(self.Vb, self.Rb).impedance(omega)
 		Z_port = self.port.impedance(omega)
 		Y = 1/Z_box + 1/Z_port
 		return 1/Y
