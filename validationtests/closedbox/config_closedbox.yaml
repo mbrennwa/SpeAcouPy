@@ -5,12 +5,12 @@ radiation_space: 2pi
 elements:
 
 - type: sealed_box
-  label: closedbox
-  Vb: 0.050     # m³  (50 liters internal volume)
+  label: CLOSEDBOX
+  Vb: 0.05     # m³  (50 liters internal volume)
   Qb-THIS-IS-NOT-YET-RECOGNIZED: 100       # High value → mostly rigid, sealed enclosure
 
 - type: driver
-  label: Faital12PR320
+  label: WOOFER
   fs: 40.1
   Vas: 0.1133
   Qms: 11
@@ -19,13 +19,13 @@ elements:
   Re: 5.4
   Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [ 10238,29.4] , [ 20000,44.21] ]
   front_load: radiation_space
-  back_load: closedbox
+  back_load: CLOSEDBOX
   front_radiator_label: driver_front
   back_radiator_label: driver_back
 
 network:
   series:
-  - Faital12PR320
+  - WOOFER
 
 frequency:
   min_hz: 20
