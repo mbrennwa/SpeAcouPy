@@ -31,9 +31,20 @@ class Ca(Acoustic):
 @dataclass
 class SealedBox(Acoustic):
 	Vb: float  # m^3
+	Rb: float  # Pa·s/m^3, acoustic loss shunt; must be > 0
+
+	def __post_init__(self):
+		if not (float(self.Rb) > 0.0):
+			raise ValueError("SealedBox: Rb must be > 0 (Pa·s/m^3).")
+
+	def _cab(self):
+		return self.Vb / (RHO0 * C0**2)
+
 	def impedance(self, omega):
-		Cab = self.Vb / (RHO0 * C0**2)
-		return 1/(1j * omega * Cab)
+		Cab = self._cab()
+		# Parallel of Rb and Cab; Rb is guaranteed > 0
+		return 1.0 / ((1.0 / float(self.Rb)) + 1j * omega * Cab)
+
 
 @dataclass
 class Port(Acoustic):

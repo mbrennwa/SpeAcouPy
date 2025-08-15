@@ -7,7 +7,7 @@ elements:
 - type: sealed_box
   label: CLOSEDBOX
   Vb: 0.05     # m³  (50 liters internal volume)
-  Qb-THIS-IS-NOT-YET-RECOGNIZED: 100       # High value → mostly rigid, sealed enclosure
+  Rb: Inf      # mechanical resistance reflecting losses due to to leaks and stuffing with damping materials (Pa·s/m³). Note: Rb = Qb x rho x c² / 2pi / fb Vb
 
 - type: driver
   label: WOOFER
