@@ -231,8 +231,12 @@ def build_registry(cfg: dict):
 		elif typ in ("ce","capacitor"):
 			reg[lab] = Ce(C=float(e["C"]))
 		elif typ in ("sealed","vented","piston","radiation","sealed_box","vented_box","bass_reflex"):
-			Sd_arg = e.get("Sd")
-			reg[lab] = build_acoustic(e, Sd=float(Sd_arg) if Sd_arg is not None else None)
+			try:
+				Sd_arg = float(e.get("Sd")) # get Sd (if explicitly specified in the element)
+			except:
+				Sd_arg = None # if Sd needs to be determined later from the Sd/geometry of the driving element
+			
+			reg[lab] = build_acoustic(e, Sd=Sd_arg)
 		elif typ == "driver":
 			pending_drivers.append(e)
 		else:
