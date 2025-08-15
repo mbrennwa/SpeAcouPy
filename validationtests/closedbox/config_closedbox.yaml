@@ -6,8 +6,9 @@ elements:
 
 - type: sealed_box
   label: CLOSEDBOX
-  Vb: 0.05     # m³  (50 liters internal volume)
-  Rb: Inf      # mechanical resistance reflecting losses due to to leaks and stuffing with damping materials (Pa·s/m³). Note: Rb = Qb x rho x c² / 2pi / fb Vb
+  Vb: 0.025     # m³  (50 liters internal volume)
+  ### Rb: Inf      # mechanical resistance reflecting losses due to to leaks and stuffing with damping materials (Pa·s/m³). Note: Rb = Qb x rho x c² / 2pi / fb Vb
+  Rb: 4.75E5    # Vituix: fb = 93.8 Hz, Ql = 100, Qa = 100 ==> Qb = 1/(1/Ql+1/Qa = 50 ==> Rb = 4.75E5
 
 - type: driver
   label: WOOFER
@@ -18,6 +19,7 @@ elements:
   Sd: 0.0539
   Re: 5.4
   Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [ 10238,29.4] , [ 20000,44.21] ]
+  ### Z_hf: [ [5000,5.4] , [ 20000,5.4] ]
   front_load: radiation_space
   back_load: CLOSEDBOX
   front_radiator_label: driver_front
@@ -28,7 +30,7 @@ network:
   - WOOFER
 
 frequency:
-  min_hz: 20
+  min_hz: 5
   max_hz: 10000
   points: 300
 
