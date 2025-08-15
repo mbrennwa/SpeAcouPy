@@ -165,12 +165,12 @@ def load_config(path: str) -> dict:
 		return yaml.safe_load(f)
 
 # ---------------- Element builders ----------------
-def build_acoustic(spec: Dict[str, Any], Sd: float):
+def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 	t = (spec.get("type") or "").lower()
-	if t in ("sealed","sealed_box"):
+	if t == "sealed_box":
 		Vb = float(spec["Vb"])  # m^3 (MKS)
 		return SealedBox(Vb=Vb)
-	if t in ("vented","vented_box","bass_reflex"):
+	if t == "vented_box":
 		Vb = float(spec["Vb"])  # m^3 (MKS)
 		d  = float(spec["port_d_m"])
 		L  = float(spec["port_L_m"])
@@ -179,11 +179,23 @@ def build_acoustic(spec: Dict[str, Any], Sd: float):
 		if "port_load" in spec:
 			setattr(vb, "port_load", spec.get("port_load"))
 		return vb
-	if t in ("piston","radiation"):
+	if t == "radiation_piston":
 		loading = (spec.get("loading") or "4pi").lower()
-		return RadiationPiston(Sd=Sd, loading=loading)
+		Sd_final = None
+		if Sd is not None:
+			Sd_final = float(Sd)
+		elif "Sd" in spec:
+			Sd_final = float(spec["Sd"])
+		elif "radius_m" in spec:
+			r = float(spec["radius_m"])
+			Sd_final = float(np.pi * r * r)
+		elif "diameter_m" in spec:
+			dgeo = float(spec["diameter_m"])
+			Sd_final = float(np.pi * (0.5 * dgeo) ** 2)
+		if Sd_final is None:
+			raise ValueError("Radiation/Piston requires Sd (m^2) explicitly or via radius_m/diameter_m.")
+		return RadiationPiston(Sd=Sd_final, loading=loading)
 	raise ValueError(f"Unknown acoustic element type: {t}")
-
 def build_registry(cfg: dict):
 	"""
 	Two-pass build:
@@ -206,15 +218,22 @@ def build_registry(cfg: dict):
 	for e in elems:
 		typ = (e.get("type") or "").lower()
 		lab = e["label"]
+		
+		# add element:
 		if typ in ("re","resistor"):
 			reg[lab] = Re(R=float(e.get("Re", e.get("R"))))
 		elif typ in ("le","inductor"):
 			reg[lab] = Le(L=float(e.get("Le", e.get("L"))))
 		elif typ in ("ce","capacitor"):
-			reg[lab] = Ce(C=float(e["C"]))
-		elif typ in ("sealed","vented","piston","radiation","sealed_box","vented_box","bass_reflex"):
-			Sd_hint = float(e.get("Sd", 0.053))
-			reg[lab] = build_acoustic(e, Sd=Sd_hint)
+			reg[lab] = Ce(C=float(e["C"]))		
+		elif typ in ("radiation_piston", "sealed_box", "vented_box"):
+			try:
+				# get Sd from e and convert to float:
+				Sd_arg = float(e.get("Sd"))
+			except:
+				# if Sd not explicitly specified (will be determined later):
+				Sd_arg = None
+			reg[lab] = build_acoustic(e, Sd=Sd_arg)
 		elif typ == "driver":
 			pending_drivers.append(e)
 		else:

@@ -4,10 +4,10 @@ radiation_space: 2pi
 
 elements:
 
-- type: sealedbox
+- type: sealed_box
   label: closedbox
   Vb: 0.050     # m³  (50 liters internal volume)
-  Qb: 100       # High value → mostly rigid, sealed enclosure
+  Qb-THIS-IS-NOT-YET-RECOGNIZED: 100       # High value → mostly rigid, sealed enclosure
 
 - type: driver
   label: Faital12PR320
