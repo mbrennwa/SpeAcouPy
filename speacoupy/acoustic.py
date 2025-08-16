@@ -50,17 +50,28 @@ class SealedBox(Acoustic):
 class Port(Acoustic):
 	diameter: float
 	length: float
+	Rp: float
+	### mouth_load: Optional[Acoustic] = None
+	mouth_load: Acoustic
 	alpha_in: float = 0.85
 	alpha_out: float = 0.61
-	R_loss: float = 0.0
+	
+	def __post_init__(self):
+		if not (float(self.Rp) > 0.0):
+			raise ValueError("Port: Rp must be > 0 Pa·s/m^3.")
+		if not (float(self.diameter) > 0.0):
+			raise ValueError("Port: diameter must be > 0 m.")
+		if not (float(self.length) > 0.0):
+			raise ValueError("Port: length must be > 0 m.")
+
 	def impedance(self, omega):
 		r = 0.5 * self.diameter
 		S = np.pi * r**2
 		L_eff = self.length + (self.alpha_in + self.alpha_out) * r
 		M_a = RHO0 * L_eff / S
 		Z = 1j * omega * M_a
-		if self.R_loss:
-			Z = Z + self.R_loss
+		if self.Rp:
+			Z = Z + self.Rp
 		return Z
 
 @dataclass
@@ -68,6 +79,11 @@ class VentedBox(Acoustic):
 	Vb: float
 	Rb: float # see SealedBox
 	port: Port
+	
+	def __post_init__(self):
+		if not (float(self.Rb) > 0.0):
+			raise ValueError("VentedBox: Rb must be > 0 Pa·s/m^3.")
+
 	def impedance(self, omega):
 		Z_box = SealedBox(self.Vb, self.Rb).impedance(omega)
 		Z_port = self.port.impedance(omega)
@@ -80,8 +96,8 @@ class RadiationPiston(Acoustic):
 	Z = ρ0 c0 π a^2 * [ 1 - J1(2ka)/(k a) - j H1(2ka)/(k a) ]
 	A boundary factor k_b ∈ {1,2,4,8} scales R and X for 4π,2π,1π,1/2π respectively.
 	"""
-	Sd: float                # diaphragm area [m^2]
-	loading: str = "4pi"     # boundary loading: 4pi|2pi|1pi|1/2pi|0.5pi
+	Sd: float        # diaphragm area [m^2]
+	loading: str     # boundary loading: 4pi|2pi|1pi|1/2pi|0.5pi
 
 	def impedance(self, omega):
 		S = self.Sd

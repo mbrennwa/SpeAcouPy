@@ -175,10 +175,14 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 			raise ValueError("SealedBox: Rb must be > 0 (Pa·s/m^3).")
 		return SealedBox(Vb=Vb, Rb=Rb)
 	if t == "vented_box":
-		Vb = float(spec["Vb"])
-		d  = float(spec["port_d_m"])
-		L  = float(spec["port_L_m"])
-		vb = VentedBox(Vb=Vb, port=Port(diameter=d, length=L))
+		Vb = float(spec["Vb"]) # box volume
+		Rb = float(spec["Rb"]) # box mechanical losses
+		d  = float(spec["Dp"]) # port diameter
+		L  = float(spec["Lp"]) # port length
+		Rp = float(spec["Rp"]) # port mechanical losses
+		portload = spec["port_load"] # acoustic load on port mouth
+		port = Port(diameter=d, length=L, Rp=Rp, mouth_load=portload)
+		vb = VentedBox(Vb=Vb, Rb=Rb, port=port)
 		if "port_load" in spec:
 			setattr(vb, "port_load", spec.get("port_load"))
 		return vb

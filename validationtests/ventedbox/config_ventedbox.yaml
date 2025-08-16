@@ -1,0 +1,39 @@
+radiation_space: 2pi
+
+elements:
+
+- type: vented_box
+  label: VENTEDBOX
+  Vb: 0.040
+  Rb: 1E6
+  Dp: 0.070
+  Lp: 0.200
+  Rp: 1E5
+  port_load: radiation_space
+
+- type: driver
+  label: WOOFER
+  fs: 40.1
+  Vas: 0.1133
+  Qms: 11
+  Qes: 0.42
+  Sd: 0.0539
+  Re: 5.4
+  Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [ 10238,29.4] , [ 20000,44.21] ]
+  front_load: radiation_space
+  back_load: VENTEDBOX
+  front_radiator_label: driver_front
+  back_radiator_label: driver_back
+
+network:
+  series:
+  - WOOFER
+
+frequency:
+  min: 20
+  max: 10000
+  points: 300
+
+source:
+  volts_rms: 2.83
+

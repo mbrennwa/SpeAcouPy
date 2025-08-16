@@ -14,7 +14,7 @@ class DriverMechanicalBranch:
 	Cms_val: float
 	front_load: Optional[Acoustic] = None
 	back_load: Optional[Acoustic] = None
-	Sd: float = 1.0
+	Sd: float
 	domain: ClassVar[Domain] = Domain.MECHANICAL
 	
 	def impedance(self, omega):
