@@ -1,5 +1,7 @@
 # SpeAcouPy Documentation
 
+**THIS DOCUMENTATION IS JUST SOME AI-GENERATED TEMPLATE AND NEEDS A LOT OF WORK BEFORE IT WILL BE USEFUL!**
+
 Welcome! This site is for **users who want to simulate loudspeaker systems** with the **SpeAcouPy CLI**.  
 You don't need Python knowledge to *use* the tool; copy the YAML examples and run the CLI.
 
