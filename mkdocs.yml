@@ -1,0 +1,45 @@
+site_name: SpeAcouPy
+site_description: CLI-first loudspeaker simulation
+site_url: https://mbrennwa.github.io/SpeAcouPy/
+repo_url: https://github.com/mbrennwa/SpeAcouPy
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.indexes
+    - content.code.copy
+    - toc.integrate
+
+plugins:
+  - search
+  - with-pdf:
+      output_path: pdf/SpeAcouPy.pdf
+      cover_title: SpeAcouPy Documentation
+      cover_subtitle: User guide and concepts
+      verbose: false
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - footnotes
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.snippets
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts:
+      - Overview: concepts/overview.md
+  - CLI:
+      - Overview: cli/index.md
+  - Configuration:
+      - Overview: config/overview.md
+  - Tutorials:
+      - Sealed box: tutorials/sealed-box.md
+  - Results:
+      - Interpreting plots: results/interpreting-plots.md
