@@ -10,6 +10,7 @@ elements:
   Lp: 0.080
   Rp: 1E-2
   port_load: radiation_space
+  port_label: PORT
 
 - type: driver
   label: WOOFER
