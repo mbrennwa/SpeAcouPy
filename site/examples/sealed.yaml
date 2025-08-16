@@ -1,0 +1,12 @@
+# Minimal sealed box example for SpeAcouPy CLI
+system:
+  driver:
+    fs: 50        # Hz
+    qts: 0.38
+    vas: 20       # liters
+enclosure:
+  type: sealed
+  volume: 15      # liters
+# Hints:
+# - Adjust 'volume' to 10 or 20 liters to see how Qtc and Fc change.
+# - Replace driver params with your datasheet values.
