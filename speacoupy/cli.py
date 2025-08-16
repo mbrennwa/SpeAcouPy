@@ -182,6 +182,10 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		Rp = float(spec["Rp"]) # port mechanical losses
 		portload = spec["port_load"] # acoustic load on port mouth
 		port = Port(diameter=d, length=L, Rp=Rp, mouth_load=portload)
+		# Apply flat 'port_label' from config if provided (no defaults)
+		plab = spec.get("port_label")
+		if isinstance(plab, str) and plab.strip():
+			setattr(port, 'label', plab.strip())
 		vb = VentedBox(Vb=Vb, Rb=Rb, port=port)
 		if "port_load" in spec:
 			setattr(vb, "port_load", spec.get("port_load"))
@@ -402,10 +406,8 @@ def build_system(cfg: dict):
 		p = RadiationPiston(Sd=Sd_drv, loading=global_space)
 		setattr(p, 'label', br_lab)
 		drv.motional.back_load = p
-	if isinstance(drv.motional.front_load, str) and drv.motional.front_load == 'radiation_space':
-		drv.motional.front_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
-	if isinstance(drv.motional.back_load, str) and drv.motional.back_load == 'radiation_space':
-		drv.motional.back_load = RadiationPiston(Sd=Sd_drv, loading=global_space)
+	# (removed) no unlabeled overwrite of front_load
+	# (removed) no unlabeled overwrite of back_load
 
 	# Vented box mouth
 	for lbl, obj in list(reg.items()):
@@ -420,6 +422,10 @@ def build_system(cfg: dict):
 				if port is None or not hasattr(port, 'diameter'):
 					raise ValueError(f"VentedBox '{lbl}' needs port geometry to derive port Sd")
 				Sd_port = np.pi * (0.5*port.diameter)**2
+				# Require explicit label for port when radiating to radiation_space
+				plab = getattr(port, 'label', None)
+				if not isinstance(plab, str) or not plab.strip():
+					raise ValueError(f"VentedBox '{lbl}' requires 'port_label' in config when port_load is 'radiation_space'.")
 				setattr(obj, 'mouth_radiator', RadiationPiston(Sd=Sd_port, loading=global_space))
 			elif isinstance(pl, str):
 				if pl not in reg:

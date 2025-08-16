@@ -31,7 +31,7 @@ class Driver(Element):
 		fl = getattr(self.motional, "front_load", None)
 		if fl is None:
 			return []
-		label = getattr(fl, "label", None) or "front"
+		label = getattr(fl, "label", None)
 		U = U_in if U_in is not None else np.zeros_like(omega, dtype=complex)
 		return [ { "label": label, "U": U } ]
 

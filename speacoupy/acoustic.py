@@ -100,7 +100,10 @@ class VentedBox(Acoustic):
 		Yp = 1.0 / (Z_port + 0j)
 		H = Yp / (Yp + Yb)
 		U_port = H * (U_in if U_in is not None else np.zeros_like(omega, dtype=complex))
-		label = getattr(self.port, "label", None) or "port"
+		label = getattr(self.port, "label", None)
+		# Enforce label only when the port radiates into radiation_space
+		if getattr(self, 'port_load', None) == 'radiation_space' and (label is None or (isinstance(label, str) and not label.strip())):
+			raise ValueError("VentedBox port requires 'port_label' when port_load is 'radiation_space'.")
 		return [ { "label": label, "U": U_port } ]
 
 
