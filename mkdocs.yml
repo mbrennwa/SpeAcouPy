@@ -37,6 +37,7 @@ nav:
       - Overview: concepts/overview.md
   - CLI:
       - Overview: cli/index.md
+      - Commands: cli/commands.md
   - Configuration:
       - Overview: config/overview.md
   - Tutorials:
