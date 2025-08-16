@@ -11,6 +11,9 @@ from .constants import RHO0, C0, P0
 
 @dataclass
 class Acoustic(Element):
+	def radiation_channels(self, omega, U_in=None):
+		return []
+
 	domain: ClassVar[Domain] = Domain.ACOUSTIC
 
 @dataclass
@@ -89,6 +92,17 @@ class VentedBox(Acoustic):
 		Z_port = self.port.impedance(omega)
 		Y = 1/Z_box + 1/Z_port
 		return 1/Y
+
+	def radiation_channels(self, omega, U_in=None):
+		Z_box = SealedBox(self.Vb, self.Rb).impedance(omega)
+		Z_port = self.port.impedance(omega)
+		Yb = 1.0 / (Z_box + 0j)
+		Yp = 1.0 / (Z_port + 0j)
+		H = Yp / (Yp + Yb)
+		U_port = H * (U_in if U_in is not None else np.zeros_like(omega, dtype=complex))
+		label = getattr(self.port, "label", None) or "port"
+		return [ { "label": label, "U": U_port } ]
+
 
 @dataclass
 class RadiationPiston(Acoustic):

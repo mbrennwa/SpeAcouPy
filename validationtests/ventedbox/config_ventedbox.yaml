@@ -8,7 +8,7 @@ elements:
   Rb: 1E6
   Dp: 0.070
   Lp: 0.200
-  Rp: 1E5
+  Rp: 1E-6
   port_load: radiation_space
 
 - type: driver
@@ -30,7 +30,7 @@ network:
   - WOOFER
 
 frequency:
-  min: 20
+  min: 1
   max: 10000
   points: 300
 
