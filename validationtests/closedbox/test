@@ -10,14 +10,21 @@ subprocess.run([
     "config_closedbox.yaml",
     "--csv",
     "--pdf",
-    "--prefix", "SpeAcouPy_output_"
+    "--prefix", "SpeAcouPy_output"
+])
+
+subprocess.run([
+    "speacoupy",
+    "config_closedbox_norise.yaml",
+    "--csv",
+    "--prefix", "SpeAcouPy_output_noRise"
 ])
 
 
 ### IMPEDANCE: COMPARE WITH VITUIX SIMULATED CURVE
 
 # load simulated data:
-faital_sim = pd.read_csv("SpeAcouPy_output__DATA.csv", sep=",", comment="#")
+faital_sim = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
 
 # load measured impedance curve:
 faital_vituix = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_Impedance_closedbox-25L.txt", sep="\t")
@@ -38,13 +45,18 @@ plt.close()
 
 ### SPL: COMPARE WITH VITUIX SIMULATION
 
+# load simulated data (with artificially flat impedance above resonance):
+faital_sim_noRise = pd.read_csv("SpeAcouPy_output_noRise_DATA.csv", sep=",", comment="#")
+
+
 # load measured impedance curve:
 faital_vituix = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_SPL_closedbox-25L-2pi.txt",sep="\t")
 
 # plot SPL curves and save to PDF:
 plt.figure()
-plt.plot(faital_sim["Frequency (Hz)"], faital_sim["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy simulation")
-plt.plot(faital_vituix["Frequency [Hz]"], faital_vituix["Total SPL 2pi [dB]"], label="Vituix CAD simulation", linestyle="--")
+plt.plot(faital_sim["Frequency (Hz)"], faital_sim["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy")
+plt.plot(faital_sim_noRise["Frequency (Hz)"], faital_sim_noRise["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy (no impedance rise)")
+plt.plot(faital_vituix["Frequency [Hz]"], faital_vituix["Total SPL 2pi [dB]"], label="Vituix CAD", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("SPL (dB-SPL)")
 plt.title("SPL Faital 12PR320 (1m/2pi)")
