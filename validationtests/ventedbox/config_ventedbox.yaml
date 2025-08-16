@@ -5,12 +5,12 @@ elements:
 - type: vented_box
   label: VENTEDBOX
   Vb: 0.052
-  Rb: 2.8563E5     # Rb = Qb*rho*c^2/2/pi/fb*Vb
+  Rb: 2.8563E5
   Dp: 0.094
   Lp: 0.080
   Rp: 1E-2
   port_load: radiation_space
-  port_label: PORT
+  port_label: PORT
 
 - type: driver
   label: WOOFER
