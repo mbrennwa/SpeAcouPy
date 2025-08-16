@@ -7,10 +7,17 @@ import matplotlib.pyplot as plt
 # simulate Faital 12PR320:
 subprocess.run([
     "speacoupy",
-    "config_closedbox.yaml",
+    "config_ventedbox.yaml",
     "--csv",
     "--pdf",
     "--prefix", "SpeAcouPy_output"
+])
+subprocess.run([
+    "speacoupy",
+    "config_ventedbox.yaml",
+    "--radiators", "driver_front"
+    "--csv",
+    "--prefix", "SpeAcouPy_output_driver-front"
 ])
 
 
@@ -19,40 +26,35 @@ subprocess.run([
 # load simulated data:
 faital_sim = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
 
-# load measured impedance curve:
-faital_vituix = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_Impedance_closedbox-25L.txt", sep="\t")
+# load Vituix impedance curve:
+faital_vituix_Z = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_Impedance_ventedbox-52L-portL8cm-portD9.4cm.txt", sep="\t", comment="#")
 
 # plot impedance curves and save to PDF:
 plt.figure()
 plt.plot(faital_sim["Frequency (Hz)"], faital_sim["Impedance Magnitude (Ω)"], label="SpeAcouPy simulation")
-plt.plot(faital_vituix["Frequency [Hz]"], faital_vituix["Impedance Magnitude [ohm]"], label="Vituix CAD", linestyle="--")
+plt.plot(faital_vituix_Z["Frequency [Hz]"], faital_vituix_Z["Impedance Magnitude [ohm]"], label="Vituix CAD", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Impedance (Ohm)")
-plt.title("Impedance Faital 12PR320 in 25 L sealed box")
+plt.title("Impedance Faital 12PR320 in 52 L vented box")
 plt.grid(True)
 plt.legend()
 plt.xscale("log")
 plt.savefig("IMPEDANCE_COMPARISON.pdf", format="pdf")
-### plt.savefig("IMPEDANCE_COMPARISON.png", format="png")
 plt.close()
 
 
 ### SPL: COMPARE WITH VITUIX SIMULATION
 
-# load simulated data (with artificially flat impedance above resonance):
-faital_sim_noRise = pd.read_csv("SpeAcouPy_output_noRise_DATA.csv", sep=",", comment="#")
-
-
-# load measured impedance curve:
-faital_vituix = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_SPL_closedbox-25L-2pi.txt",sep="\t")
+# load Vituix SPL curve:
+faital_vituix_SPL = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_SPL_ventedbox-52L-portL8cm-portD9.4cm-2pi.txt",sep="\t")
 
 # plot SPL curves and save to PDF:
 plt.figure()
 plt.plot(faital_sim["Frequency (Hz)"], faital_sim["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy")
-plt.plot(faital_vituix["Frequency [Hz]"], faital_vituix["Total SPL 2pi [dB]"], label="Vituix CAD", linestyle="--")
+plt.plot(faital_vituix_SPL["Frequency [Hz]"], faital_vituix_SPL["Total SPL 2pi [dB]"], label="Vituix CAD", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("SPL (dB-SPL)")
-plt.title("SPL Faital 12PR320 in 25 L sealed box (1m/2pi)")
+plt.title("SPL Faital 12PR320 in 52 L vented box (1m/2pi)")
 plt.grid(True)
 plt.legend()
 plt.xscale("log")

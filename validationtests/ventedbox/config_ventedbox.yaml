@@ -4,11 +4,11 @@ elements:
 
 - type: vented_box
   label: VENTEDBOX
-  Vb: 0.040
-  Rb: 1E6
-  Dp: 0.070
-  Lp: 0.200
-  Rp: 1E-6
+  Vb: 0.052
+  Rb: 2.8563E5     # Rb = Qb*rho*c^2/2/pi/fb*Vb
+  Dp: 0.094
+  Lp: 0.080
+  Rp: 1E-2
   port_load: radiation_space
 
 - type: driver
@@ -30,7 +30,7 @@ network:
   - WOOFER
 
 frequency:
-  min: 1
+  min: 10
   max: 10000
   points: 300
 
