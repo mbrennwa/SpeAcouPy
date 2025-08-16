@@ -15,9 +15,16 @@ subprocess.run([
 subprocess.run([
     "speacoupy",
     "config_ventedbox.yaml",
-    "--radiators", "driver_front"
+    "--radiators", "driver_front",
     "--csv",
     "--prefix", "SpeAcouPy_output_driver-front"
+])
+subprocess.run([
+    "speacoupy",
+    "config_ventedbox.yaml",
+    "--radiators", "PORT",
+    "--csv",
+    "--prefix", "SpeAcouPy_output_PORT"
 ])
 
 
@@ -25,6 +32,9 @@ subprocess.run([
 
 # load simulated data:
 faital_sim = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
+faital_sim_cone = pd.read_csv("SpeAcouPy_output_driver-front_DATA.csv", sep=",", comment="#")
+# load simulated data:
+faital_sim_port = pd.read_csv("SpeAcouPy_output_PORT_DATA.csv", sep=",", comment="#")
 
 # load Vituix impedance curve:
 faital_vituix_Z = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_Impedance_ventedbox-52L-portL8cm-portD9.4cm.txt", sep="\t", comment="#")
@@ -51,7 +61,10 @@ faital_vituix_SPL = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_SPL_ventedbox-52
 # plot SPL curves and save to PDF:
 plt.figure()
 plt.plot(faital_sim["Frequency (Hz)"], faital_sim["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy")
+plt.plot(faital_sim_cone["Frequency (Hz)"], faital_sim_cone["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy (cone)")
+plt.plot(faital_sim_port["Frequency (Hz)"], faital_sim_port["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy (port)")
 plt.plot(faital_vituix_SPL["Frequency [Hz]"], faital_vituix_SPL["Total SPL 2pi [dB]"], label="Vituix CAD", linestyle="--")
+plt.plot(faital_vituix_SPL["Frequency [Hz]"], faital_vituix_SPL["Vent 1 SPL [dB]"], label="Vituix CAD (port)", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("SPL (dB-SPL)")
 plt.title("SPL Faital 12PR320 in 52 L vented box (1m/2pi)")
