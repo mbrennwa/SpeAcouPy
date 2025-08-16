@@ -23,8 +23,8 @@ network:
   series:
   - Faital12PR320
 frequency:
-  min_hz: 5
-  max_hz: 10000
+  min: 5
+  max: 10000
   points: 300
 
 source:

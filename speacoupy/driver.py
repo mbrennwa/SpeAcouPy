@@ -41,6 +41,3 @@ class Driver(Element):
 	def impedance_voicecoil(self, omega):
 		# Semi-inductance (lossy inductor) model: Z = Re + k*(j*omega)^alpha
 		return self.Re_val + self.k_semi * (1j*omega)**(self.alpha_semi)
-		
-	def Sd(self):
-		return self.motional.Sd

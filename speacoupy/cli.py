@@ -1,20 +1,24 @@
 from __future__ import annotations
 import argparse, os
-from typing import Any, Dict
+import datetime, pytz, csv
+## import math
 import numpy as np
-import yaml
+import pandas as pd
 from pathlib import Path
+from typing import Any, Dict
+import yaml
 
 from . import (
 	omega_logspace, Net, Series, Parallel,
-	Ce, Le, Re, Driver,
-	DriverMechanicalBranch, Port, SealedBox, VentedBox, RadiationPiston,
+	Ce, Le, Re,
+	Driver, DriverMechanicalBranch,
+	RadiationPiston, Port, SealedBox, VentedBox,
 )
-from .plotting import plot_spl, plot_impedance, plot_spl_multi
+from .acoustic import RadiationPiston
+from .plotting import plot_impedance, plot_spl, plot_spl_multi
+from .constants import PROGRAMNAME, TWOPI, RHO0, C0, FARFIELD_DIST_M
+from .driver import Driver as DriverClass
 from .response import ResponseSolver
-import pandas as pd
-from .constants import PROGRAMNAME
-import datetime, pytz, csv
 
 def _get_version_from_pyproject() -> str:
 	try:
@@ -26,7 +30,10 @@ def _get_version_from_pyproject() -> str:
 		return m.group(1) if m else "unknown"
 	except Exception:
 		return "unknown"
-def write_response_csv(res, outdir: str, pre: str, loading_label: str):
+
+def write_fresponse_csv(res, outdir: str, pre: str, loading_label: str):
+	"""write frequency-response data to CSV
+	"""
 	outpath = os.path.join(outdir, f"{pre}DATA.csv")
 	# Build columns
 	data = {
@@ -70,20 +77,11 @@ def write_response_csv(res, outdir: str, pre: str, loading_label: str):
 			f.write(line + "\n")
 	df.to_csv(outpath, mode="a", index=False, quoting=csv.QUOTE_NONE, escapechar="\\")
 
-
-from .constants import PROGRAMNAME, FARFIELD_DIST_M
-
-from math import log
-import numpy as np
-
-
-
 def fit_semi_inductance(points, Re, Bl, Rms, Mms, Cms):
 	"""Direct total-magnitude fit: find k>=0, 0<alpha<=1 minimizing
 		sum_i (log| Re + k*(j*omega_i)^alpha + (Bl^2)/Zm(omega_i) | - log|Z_meas,i|)^2
 	No phase data required.
 	"""
-	TWOPI = 2.0 * np.pi
 	# Prepare arrays
 	freq = []
 	Zmeas = []
@@ -167,7 +165,7 @@ def load_config(path: str) -> dict:
 # ---------------- Element builders ----------------
 def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 	t = (spec.get("type") or "").lower()
-	if t in ("sealed","sealed_box"):
+	if t == "sealed_box":
 		Vb = float(spec["Vb"])
 		Rb = spec.get("Rb")
 		if Rb is None:
@@ -176,7 +174,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		if not (Rb > 0.0):
 			raise ValueError("SealedBox: Rb must be > 0 (Pa·s/m^3).")
 		return SealedBox(Vb=Vb, Rb=Rb)
-	if t in ("vented","vented_box","bass_reflex"):
+	if t == "vented_box":
 		Vb = float(spec["Vb"])
 		d  = float(spec["port_d_m"])
 		L  = float(spec["port_L_m"])
@@ -184,21 +182,26 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		if "port_load" in spec:
 			setattr(vb, "port_load", spec.get("port_load"))
 		return vb
-	if t in ("piston","radiation"):
-		loading = (spec.get("loading") or "4pi").lower()
+	if t == "radiation_piston":
+		### NO FUNNY DEFAULT 4pi LOADING PLEASE. WE'LL WANT TO BE EXPLICIT ABOUT LOADING!? loading = (spec.get("loading") or "4pi").lower()
+		loading = spec.get("loading").lower()
 		Sd_final = None
 		if Sd is not None:
 			Sd_final = float(Sd)
 		elif "Sd" in spec:
 			Sd_final = float(spec["Sd"])
-		elif "radius_m" in spec:
-			r = float(spec["radius_m"])
-			Sd_final = float(np.pi * r * r)
-		elif "diameter_m" in spec:
-			dgeo = float(spec["diameter_m"])
-			Sd_final = float(np.pi * (0.5 * dgeo) ** 2)
+		
+		### Let's see if we can require explicit Sd spec, so the following would not be needed:
+		### elif "radius_m" in spec:
+		### 	r = float(spec["radius_m"])
+		### 	Sd_final = float(np.pi * r * r)
+		### elif "diameter_m" in spec:
+		### 	dgeo = float(spec["diameter_m"])
+		### 	Sd_final = float(np.pi * (0.5 * dgeo) ** 2)
+		
 		if Sd_final is None:
-			raise ValueError("Radiation/Piston requires Sd (m^2) explicitly or via radius_m/diameter_m.")
+			### raise ValueError("Radiation/Piston requires Sd (m^2) explicitly or via radius_m/diameter_m.")
+			raise ValueError("Radiation piston requires Sd (m^2) explicitly.")
 		return RadiationPiston(Sd=Sd_final, loading=loading)
 	raise ValueError(f"Unknown acoustic element type: {t}")
 
@@ -224,13 +227,13 @@ def build_registry(cfg: dict):
 	for e in elems:
 		typ = (e.get("type") or "").lower()
 		lab = e["label"]
-		if typ in ("re","resistor"):
+		if typ == "resistor":
 			reg[lab] = Re(R=float(e.get("Re", e.get("R"))))
-		elif typ in ("le","inductor"):
+		elif typ == "inductor":
 			reg[lab] = Le(L=float(e.get("Le", e.get("L"))))
-		elif typ in ("ce","capacitor"):
+		elif typ == "capacitor":
 			reg[lab] = Ce(C=float(e["C"]))
-		elif typ in ("sealed","vented","piston","radiation","sealed_box","vented_box","bass_reflex"):
+		elif typ in ("radiation_piston","sealed_box","vented_box"):
 			try:
 				Sd_arg = float(e.get("Sd")) # get Sd (if explicitly specified in the element)
 			except:
@@ -243,36 +246,34 @@ def build_registry(cfg: dict):
 			raise ValueError(f"Unknown element type: {typ} (label={lab})")
 
 	# Second pass: drivers (MKS inputs: Sd[m^2], fs[Hz], Vas[m^3], Qms, Qes)
-	RHO0 = 1.204   # kg/m^3
-	C_AIR = 343.0  # m/s
-	TWOPI = 2.0 * np.pi
-
 	for e in pending_drivers:
-		lab = e["label"]
-		Sd = float(e["Sd"])          # m^2
-		fs = float(e["fs"])          # Hz
-		Vas = float(e["Vas"])        # m^3
-		Qms = float(e["Qms"])
-		Qes = float(e["Qes"])
-		Re_val = float(e.get("Re", 6.0))
+		lab    = e["label"]
+		Sd     = float(e["Sd"])		# m^2
+		fs     = float(e["fs"])		# Hz
+		Vas    = float(e["Vas"])	# m^3
+		Qms    = float(e["Qms"])
+		Qes    = float(e["Qes"])
+		Re_val = float(e["Re"])
 
 		front_lab = e.get("front_load")
+		if not front_lab:
+			raise ValueError(f"Driver '{lab}' must specify front_load label.")
 		back_lab  = e.get("back_load")
-		if not front_lab or not back_lab:
-			raise ValueError(f"Driver '{lab}' must specify front_load and back_load labels.")
-
+		if not back_lab:
+			raise ValueError(f"Driver '{lab}' must specify back_lab label.")
 		def _is_known_load(lbl: str) -> bool:
 			return (isinstance(lbl, str) and lbl == 'radiation_space') or (lbl in reg)
-
-		if not _is_known_load(front_lab) or not _is_known_load(back_lab):
-			raise ValueError(f"Driver '{lab}' references unknown loads: front_load={front_lab}, back_load={back_lab}")
+		if not _is_known_load(front_lab) :
+			raise ValueError(f"Driver '{lab}' references unknown front_load={front_lab}")
+		if not _is_known_load(back_lab):
+			raise ValueError(f"Driver '{lab}' references unknown back_load={back_lab}")
 
 		# Keep placeholders; translate later in build_system
 		front_load_obj = reg[front_lab] if front_lab in reg else 'radiation_space'
 		back_load_obj  = reg[back_lab]  if back_lab  in reg else 'radiation_space'
 
 		omega_s = TWOPI * fs
-		Cms = Vas / (RHO0 * (C_AIR**2) * (Sd**2))
+		Cms = Vas / (RHO0 * (C0**2) * (Sd**2))
 		Mms = 1.0 / (omega_s**2 * Cms)
 		Rms = (omega_s * Mms) / Qms
 		Bl  = np.sqrt(omega_s * Mms * Re_val / Qes)
@@ -313,7 +314,7 @@ def build_registry(cfg: dict):
 				setattr(drv, 'back_radiator_label', e['back_radiator_label'])
 		reg[lab] = drv
 
-	# Find exactly one driver
+	# Make sure there is exactly one driver
 	from .driver import Driver as DriverClass
 	drivers = [k for k,v in reg.items() if isinstance(v, DriverClass)]
 	if len(drivers) != 1:
@@ -325,8 +326,11 @@ def build_net(node, reg):
 		if node not in reg:
 			raise ValueError(f"Unknown element label in network: {node}")
 		return reg[node]
-	if isinstance(node, list):
-		return Series(parts=[build_net(x, reg) for x in node])
+	
+	### if isinstance(node, list):
+	### 	HOW DO YOU KNOW THIS SHOULD BE A SERIES CONNECTION? COULD BE SOMETHING ELSE, LIKE PARALLEL!?
+	### 	return Series(parts=[build_net(x, reg) for x in node])
+	
 	if not isinstance(node, dict):
 		raise ValueError(f"Network node must be a label, list, or dict; got {type(node)}")
 	if "series" in node:
@@ -344,9 +348,24 @@ def _get_global_rspace(cfg: dict) -> str:
 	return val
 
 def build_system(cfg: dict):
-	fmin = float(cfg.get("frequency", {}).get("min_hz", 10.0))
-	fmax = float(cfg.get("frequency", {}).get("max_hz", 20000.0))
-	npts = int(cfg.get("frequency", {}).get("points", 1200))
+	### fmin = float(cfg.get("frequency", {}).get("min", 10.0))
+	### fmax = float(cfg.get("frequency", {}).get("max", 20000.0))
+	### npts = int(cfg.get("frequency", {}).get("points", 100))
+	frequencies = cfg.get("frequency")
+	if not frequencies:
+		raise ValueError("Config must define 'frequencies' on top-level.")
+	try:
+		fmin = float(frequencies.get("min"))
+	except:
+		raise ValueError("Frequency 'min' is missing or not a number.")
+	try:
+		fmax = float(frequencies.get("max"))
+	except:
+		raise ValueError("Frequency 'max' is missing or not a number.")
+	try:
+		npts = int(frequencies.get("points"))
+	except:
+		raise ValueError("Frequency 'points' is missing or not a number.")
 	f, w = omega_logspace(fmin, fmax, npts)
 
 	# Build registry first
@@ -356,10 +375,6 @@ def build_system(cfg: dict):
 	global_space = _get_global_rspace(cfg)
 
 	# Resolve placeholders across registry
-	from .acoustic import RadiationPiston
-	from .driver import Driver as DriverClass
-	import math
-
 	# Driver front/back placeholders
 	drv = None
 	for v in reg.values():
@@ -393,12 +408,14 @@ def build_system(cfg: dict):
 		if obj.__class__.__name__ == 'VentedBox':
 			pl = getattr(obj, 'port_load', None)
 			if pl is None:
-				continue
+				### NO LOADING FOR THE PORT SEEMS WRONG. LET'S THROW AN ERROR RATHER THAN JUST CONTINUE!
+				### continue
+				raise ValueError(f"VentedBox '{lbl}' port has no loading defined.")
 			if isinstance(pl, str) and pl == 'radiation_space':
 				port = getattr(obj, 'port', None)
 				if port is None or not hasattr(port, 'diameter'):
-					raise ValueError(f"VentedBox '{lbl}' needs port geometry to derive mouth Sd")
-				Sd_port = math.pi * (0.5*port.diameter)**2
+					raise ValueError(f"VentedBox '{lbl}' needs port geometry to derive port Sd")
+				Sd_port = np.pi * (0.5*port.diameter)**2
 				setattr(obj, 'mouth_radiator', RadiationPiston(Sd=Sd_port, loading=global_space))
 			elif isinstance(pl, str):
 				if pl not in reg:
@@ -410,16 +427,22 @@ def build_system(cfg: dict):
 		raise ValueError("Config must define 'network' using labels.")
 	net = build_net(net_spec, reg)
 
-	Vsrc = float(cfg.get("source", {}).get("volts_rms", 2.83))
+	src_spec = cfg.get("source")
+	if not src_spec:
+		raise ValueError("Config must define 'source' on top-level.")
+	try:
+		Vsrc = float(src_spec.get("volts_rms"))
+	except:
+		raise ValueError("source is missing 'volts_rms', or value is not a number.")
 	r = FARFIELD_DIST_M
 	angles = cfg.get("angles_deg")
 	angles = np.array(angles, dtype=float) if angles else None
 
 	loading_label = global_space
-	return f, w, net, drv, drv.motional.Sd, Vsrc, r, loading_label, angles
+	return f, w, net, drv, Vsrc, r, loading_label, angles
 
 def main(argv=None):
-	parser = argparse.ArgumentParser(prog='speacoupy', description=f"{PROGRAMNAME}: Simulation of loudspeaker systems using networks of electro-mechano-acoustical elements")
+	parser = argparse.ArgumentParser(prog='speacoupy', description=f"{PROGRAMNAME}: Simulation of loudspeaker systems using networks of electric, mechanical, and acoustical elements")
 	parser.add_argument("config", help="YAML config file")
 	parser.add_argument('--radiators', nargs='+', default=None,
 		help='Terminal radiator labels to include in SPL (must match labeled terminal radiators in config)')
@@ -427,22 +450,24 @@ def main(argv=None):
 	parser.add_argument("--prefix", default="", help="Filename prefix")
 	parser.add_argument("--png", action="store_true", help="Write PNG plots")
 	parser.add_argument("--pdf", action="store_true", help="Write PDF plots")
-	parser.add_argument("--csv", action="store_true", help="Write combined CSV data file")
+	parser.add_argument("--csv", action="store_true", help="Write combined data to CSV file")
 	args = parser.parse_args(argv)
 	if not (args.png or args.pdf or args.csv):
 		parser.error("You must specify at least one output format: --png, --pdf, --csv")
 
 	cfg = load_config(args.config)
-	f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
+	### NADA Sd (it is in drv.motional.Sd already): f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
+	f, w, net, drv, Vsrc, r, loading_label, angles = build_system(cfg)
 
-	solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
+	### NADA Sd IN INPUTS (it is in drv.motional.Sd already): solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
+	solver = ResponseSolver(series_net=net, driver=drv)
 	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles, include_radiators=args.radiators)
 
 	os.makedirs(args.outdir, exist_ok=True)
-	### tag = loading_label.replace("/", "")
 	pre = (args.prefix + "_") if args.prefix else ""
 
 	outputs = []
+	# PLOTS
 	for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
 		if enabled:
 			plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
@@ -457,7 +482,7 @@ def main(argv=None):
 			outputs.append(fmt.upper())
 	# CSV output
 	if args.csv:
-		write_response_csv(res, args.outdir, pre, loading_label)
+		write_fresponse_csv(res, args.outdir, pre, loading_label)
 		outputs.append("CSV")
 	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/')
 	return 0

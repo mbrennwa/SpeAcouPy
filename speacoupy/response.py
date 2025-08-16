@@ -105,7 +105,8 @@ class ResponseSolver:
 
 		return p_total, p_by_radiator
 
-	def __init__(self, series_net: Element, driver: Driver, Sd: float):
+	### NADA Sd in inputs: def __init__(self, series_net: Element, driver: Driver, Sd: float):
+	def __init__(self, series_net: Element, driver: Driver):
 		self.series = series_net
 		self.driver = driver
 		
@@ -119,7 +120,7 @@ class ResponseSolver:
 		Zvc = self.driver.impedance_voicecoil(omega)		# driver voice-coil impedance (without motional part)
 		Zm = (self.driver.Bl**2) / (Z_driver - Zvc)		# motional impedance in mechanical domain
 		v = (self.driver.Bl * Id) / Zm				# cone velocity
-		U = v * self.driver.Sd()				# volume flow at (front of) driver cone
+		U = v * self.driver.motional.Sd				# volume flow at (front of) driver cone
 	
 		# General per-radiator summation
 		p_total, p_by_radiator = self._sum_radiators(omega, U, r, loading, include_labels=include_radiators)
@@ -133,7 +134,7 @@ class ResponseSolver:
 		if angles_deg is not None and angles_deg.size > 0:
 			th = np.deg2rad(angles_deg)
 			### D = piston_directivity(self.Sd, omega, th)  # shape (n_angles, n_freq)
-			D = piston_directivity(self.driver.Sd(), omega, th)  # shape (n_angles, n_freq)
+			D = piston_directivity(self.driver.motional.Sd, omega, th)  # shape (n_angles, n_freq)
 			p_ang = (D * p_total.reshape((1,-1)))
 			SPL_off = 20*np.log10(np.maximum(np.abs(p_ang), 1e-16) / P0)
 
