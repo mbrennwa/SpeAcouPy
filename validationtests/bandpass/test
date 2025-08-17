@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import subprocess
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# simulate Faital 12PR320:
+subprocess.run([
+    "speacoupy",
+    "config_bandpass.yaml",
+    "--csv",
+    "--pdf",
+    "--prefix", "SpeAcouPy_output"
+])
+
+
+### IMPEDANCE: COMPARE WITH VITUIX SIMULATED CURVE
+
+# load simulated data:
+faital_sim = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
+
+# load Vituix impedance curve:
+faital_vituix_Z = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_Impedance_bandpass_Vclos25L-Vport52-52L-portL8cm-portD9.4cm.txt", sep="\t", comment="#")
+
+# load Vituix SPL curve:
+faital_vituix_SPL = pd.read_csv("Faital12PR320-OSMC-warm_Vituix_SPL_bandpass_Vclos25L-Vport52-52L-portL8cm-portD9.4cm-2pi.txt",sep="\t")
+
+
+# plot impedance curves and save to PDF:
+plt.figure()
+plt.plot(faital_sim["Frequency (Hz)"], faital_sim["Impedance Magnitude (Ω)"], label="SpeAcouPy simulation")
+plt.plot(faital_vituix_Z["Frequency [Hz]"], faital_vituix_Z["Impedance Magnitude [ohm]"], label="Vituix CAD", linestyle="--")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Impedance (Ohm)")
+plt.title("Impedance Faital 12PR320 in bandpass box")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("IMPEDANCE_COMPARISON.pdf", format="pdf")
+plt.close()
+
+
+### SPL: COMPARE WITH VITUIX SIMULATION
+
+
+# plot SPL curves and save to PDF:
+plt.figure()
+plt.plot(faital_sim["Frequency (Hz)"], faital_sim["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy")
+plt.plot(faital_vituix_SPL["Frequency [Hz]"], faital_vituix_SPL["Total SPL 2pi [dB]"], label="Vituix CAD", linestyle="--")
+plt.title("SPL Faital 12PR320 in bandpass box (1m/2pi)")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("SPL_COMPARISON.pdf", format="pdf")
+plt.close()
+

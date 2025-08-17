@@ -4,16 +4,16 @@ elements:
 
 - type: sealed_box
   label: CLOSEDCHAMBER
-  Vb: 0.025     # m³  (50 liters internal volume)
-  Rb: 4.75E5    # Vituix: fb = 93.8 Hz, Ql = 100, Qa = 100 ==> Qb = 1/(1/Ql+1/Qa = 50 ==> Rb = 4.75E5
+  Vb: 25E-3     # m³  (50 liters internal volume)
+  Rb: 3E5    # Vituix: fb = 93.8 Hz, Ql = 100, Qa = 100 ==> Qb = 1/(1/Ql+1/Qa = 50 ==> Rb = 4.75E5
 
 - type: vented_box
   label: VENTEDCHAMBER
-  Vb: 0.052
-  Rb: 2.8563E5
+  Vb: 52E-3
+  Rb: 9.0E4
   Dp: 0.094
-  Lp: 0.080
-  Rp: 1E-2
+  Lp: 75E-3
+  Rp: 1E-3
   port_load: radiation_space
   port_label: PORT
 
