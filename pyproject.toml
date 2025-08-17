@@ -6,8 +6,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "SpeAcouPy"
 version = "0.5.1"
-description = "Loudspeaker Electro-Mechanical-Acoustical Modelling in Python"
-authors = [{name="You"}]
+description = "Loudspeaker Modelling using Networks of Electrical, Mechanical and Acoustical Elements in Python"
+authors = [{name="Matthias Brennwald"}]
 requires-python = ">=3.9"
 dependencies = ["numpy", "matplotlib", "pyyaml", "scipy", "pandas", "pytz"]
 readme = "README.md"
