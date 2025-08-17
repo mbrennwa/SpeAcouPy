@@ -15,24 +15,13 @@ from . import (
 	Driver, DriverMechanicalBranch,
 	RadiationPiston, Port, SealedBox, VentedBox,
 )
+
+from .acoustic import Horn
 from .acoustic import RadiationPiston
 from .plotting import plot_impedance, plot_spl, plot_spl_multi
 from .constants import PROGRAMNAME, TWOPI, RHO0, C0, FARFIELD_DIST_M
 from .driver import Driver as DriverClass
 from .response import ResponseSolver
-
-# Global validation: any '*_load: radiation_space' must have a corresponding label
-def _validate_radiation_space_labels(spec: dict, kind: str) -> None:
-	for k, v in list(spec.items()):
-		if not k.endswith("_load"):
-			continue
-		if v != "radiation_space":
-			continue
-		prefix = k[:-5]
-		label_keys = (f"{prefix}_label", f"{prefix}_radiator_label")
-		if not any((lk in spec) and str(spec[lk]).strip() for lk in label_keys):
-			raise ValueError(f"{kind}: missing {prefix}_label when {k}: radiation_space")
-
 
 def _get_version_from_pyproject() -> str:
 	try:
@@ -178,8 +167,6 @@ def load_config(path: str) -> dict:
 # ---------------- Element builders ----------------
 def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 	t = (spec.get("type") or "").lower()
-	if t in ("horn", "sealed_box", "vented_box", "radiation_piston"):
-		_validate_radiation_space_labels(spec, t)
 	if t == "sealed_box":
 		Vb = float(spec["Vb"])
 		Rb = spec.get("Rb")
@@ -226,6 +213,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 			### raise ValueError("Radiation/Piston requires Sd (m^2) explicitly or via radius_m/diameter_m.")
 			raise ValueError("Radiation piston requires Sd (m^2) explicitly.")
 		return RadiationPiston(Sd=Sd_final, loading=loading)
+	
 	if t == "horn":
 		for kreq in ("L", "S_throat", "S_mouth", "profile"):
 			if kreq not in spec:
@@ -237,10 +225,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		mouth_label = spec.get("mouth_label", None)
 		throat_load = spec.get("throat_load", None)
 		throat_label = spec.get("throat_label", None)
-		allowed = {
-			"type", "label", "L", "S_throat", "S_mouth", "profile",
-			"mouth_load", "mouth_label", "throat_load", "throat_label"
-		}
+		allowed = {"type","label","L","S_throat","S_mouth","profile","mouth_load","mouth_label","throat_load","throat_label"}
 		unknown = set(spec.keys()) - allowed
 		if unknown:
 			raise KeyError(f"horn: unknown keys: {sorted(unknown)}")
@@ -286,7 +271,7 @@ def build_registry(cfg: dict):
 			reg[lab] = Le(L=float(e.get("Le", e.get("L"))))
 		elif typ == "capacitor":
 			reg[lab] = Ce(C=float(e["C"]))
-		elif typ in ("radiation_piston","sealed_box","vented_box"):
+		elif typ in ("radiation_piston","sealed_box","vented_box","horn"):
 			try:
 				Sd_arg = float(e.get("Sd")) # get Sd (if explicitly specified in the element)
 			except:

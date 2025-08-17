@@ -169,13 +169,15 @@ class RadiationSpace:
 	def __repr__(self):
 		return f"RadiationSpace({self.space})"
 
+from dataclasses import dataclass
+
 @dataclass
 class Horn(Acoustic):
-	"""Simple horn (conical or exponential) via slice-wise ABCD (Webster 1D)."""
-	L: float
-	S_throat: float
-	S_mouth: float
-	profile: str  # "con" | "exp"
+	label: str = ""
+	L: float = 0.0
+	S_throat: float = 0.0
+	S_mouth: float = 0.0
+	profile: str = "con"  # "con" | "exp"
 	mouth_load: str | None = None
 	mouth_label: str | None = None
 	throat_load: str | None = None
@@ -209,18 +211,18 @@ class Horn(Acoustic):
 		xc = (np.arange(N) + 0.5) * dx
 		S = self._area(xc)[None, :]
 		gamma = 1j * omega / C0
-		cosh_gdx = np.cosh(gamma[:, None] * dx)
-		sinh_gdx = np.sinh(gamma[:, None] * dx)
+		cosh_gdx = np.cosh(gamma * dx)
+		sinh_gdx = np.sinh(gamma * dx)
 		Zc = (RHO0 * C0) / S
 		A = np.ones((F,), dtype=np.complex128)
 		B = np.zeros((F,), dtype=np.complex128)
 		C = np.zeros((F,), dtype=np.complex128)
 		D = np.ones((F,), dtype=np.complex128)
 		for i in range(N):
-			Ai = cosh_gdx[:, i]
-			Bi = Zc[:, i] * sinh_gdx[:, i]
-			Ci = sinh_gdx[:, i] / Zc[:, i]
-			Di = cosh_gdx[:, i]
+			Ai = cosh_gdx
+			Bi = Zc[:, i] * sinh_gdx
+			Ci = sinh_gdx / Zc[:, i]
+			Di = cosh_gdx
 			A, B, C, D = A*Ai + B*Ci, A*Bi + B*Di, C*Ai + D*Ci, C*Bi + D*Di
 		return A, B, C, D
 
@@ -264,10 +266,11 @@ class Horn(Acoustic):
 		den = (C * ZL + D)
 		den = np.where(np.abs(den) < 1e-18, 1e-18 + 0j, den)
 		H_umouth = 1.0 / den
-		out = []
+		chs = []
 		if self.mouth_load == "radiation_space" and self.mouth_label:
-			out.append({ "label": self.mouth_label, "U": (H_umouth * U_in if U_in is not None else H_umouth) })
+			Ui = H_umouth * (U_in if U_in is not None else np.zeros_like(omega, dtype=complex))
+			chs.append({ "label": self.mouth_label, "U": Ui })
 		if self.throat_load == "radiation_space" and self.throat_label:
-			out.append({ "label": self.throat_label, "U": (U_in if U_in is not None else np.zeros_like(omega, dtype=complex)) })
-		return out
-
+			Ui = U_in if U_in is not None else np.zeros_like(omega, dtype=complex)
+			chs.append({ "label": self.throat_label, "U": Ui })
+		return chs
