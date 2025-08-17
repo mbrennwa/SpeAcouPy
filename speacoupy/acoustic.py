@@ -266,11 +266,28 @@ class Horn(Acoustic):
 		den = (C * ZL + D)
 		den = np.where(np.abs(den) < 1e-18, 1e-18 + 0j, den)
 		H_umouth = 1.0 / den
+
 		chs = []
 		if self.mouth_load == "radiation_space" and self.mouth_label:
-			Ui = H_umouth * (U_in if U_in is not None else np.zeros_like(omega, dtype=complex))
-			chs.append({ "label": self.mouth_label, "U": Ui })
+			if U_in is None:
+				Ui = H_umouth      # transfer function
+			else:
+				Ui = H_umouth * U_in
+			chs.append({
+				"label": self.mouth_label,
+				"U": Ui,
+				"S": self.S_mouth,
+			})
+
 		if self.throat_load == "radiation_space" and self.throat_label:
-			Ui = U_in if U_in is not None else np.zeros_like(omega, dtype=complex)
-			chs.append({ "label": self.throat_label, "U": Ui })
+			if U_in is None:
+				Ui = np.ones_like(omega, dtype=complex)  # unit transfer
+			else:
+				Ui = U_in
+			chs.append({
+				"label": self.throat_label,
+				"U": Ui,
+				"S": self.S_throat,
+			})
+
 		return chs
