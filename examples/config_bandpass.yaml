@@ -1,0 +1,45 @@
+radiation_space: 2pi
+
+elements:
+
+- type: sealed_box
+  label: CLOSEDCHAMBER
+  Vb: 25E-3     # m³  (50 liters internal volume)
+  Rb: 3E5    # Vituix: fb = 93.8 Hz, Ql = 100, Qa = 100 ==> Qb = 1/(1/Ql+1/Qa = 50 ==> Rb = 4.75E5
+
+- type: vented_box
+  label: VENTEDCHAMBER
+  Vb: 52E-3
+  Rb: 9.0E4
+  Dp: 0.094
+  Lp: 75E-3
+  Rp: 1E-3
+  port_load: radiation_space
+  port_label: PORT
+
+- type: driver
+  label: WOOFER
+  fs: 40.1
+  Vas: 0.1133
+  Qms: 11
+  Qes: 0.42
+  Sd: 0.0539
+  Re: 5.4
+  Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [ 10238,29.4] , [ 20000,44.21] ]
+  front_load: VENTEDCHAMBER
+  back_load: CLOSEDCHAMBER
+  front_radiator_label: driver_front
+  back_radiator_label: driver_back
+
+circuit:
+  series:
+  - WOOFER
+
+frequency:
+  min: 10
+  max: 10000
+  points: 300
+
+source:
+  volts_rms: 2.83
+
