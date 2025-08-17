@@ -22,6 +22,7 @@ elements:
 network:
   series:
   - Faital12PR320
+  
 frequency:
   min: 5
   max: 10000
