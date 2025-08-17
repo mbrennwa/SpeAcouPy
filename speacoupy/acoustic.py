@@ -168,3 +168,106 @@ class RadiationSpace:
 
 	def __repr__(self):
 		return f"RadiationSpace({self.space})"
+
+@dataclass
+class Horn(Acoustic):
+	"""Simple horn (conical or exponential) via slice-wise ABCD (Webster 1D)."""
+	L: float
+	S_throat: float
+	S_mouth: float
+	profile: str  # "con" | "exp"
+	mouth_load: str | None = None
+	mouth_label: str | None = None
+	throat_load: str | None = None
+	throat_label: str | None = None
+
+	_m: float | None = None  # derived for exp
+
+	def __post_init__(self) -> None:
+		self.profile = (self.profile or "con").lower()
+		if self.profile not in ("con", "exp"):
+			raise ValueError("Horn.profile must be 'con' or 'exp'")
+		if self.L <= 0 or self.S_throat <= 0 or self.S_mouth <= 0:
+			raise ValueError("Horn: L, S_throat, S_mouth must be > 0")
+		if self.profile == "exp":
+			self._m = np.log(self.S_mouth / self.S_throat) / self.L
+		else:
+			self._m = None
+		if (self.mouth_load == "radiation_space") and not self.mouth_label:
+			raise ValueError("Horn: mouth_label is required when mouth_load='radiation_space'")
+		if (self.throat_load == "radiation_space") and not self.throat_label:
+			raise ValueError("Horn: throat_label is required when throat_load='radiation_space'")
+
+	def _area(self, x: np.ndarray) -> np.ndarray:
+		if self.profile == "con":
+			return self.S_throat + (self.S_mouth - self.S_throat) * (x / self.L)
+		return self.S_throat * np.exp((self._m or 0.0) * x)
+
+	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
+		F = omega.size
+		dx = self.L / N
+		xc = (np.arange(N) + 0.5) * dx
+		S = self._area(xc)[None, :]
+		gamma = 1j * omega / C0
+		cosh_gdx = np.cosh(gamma[:, None] * dx)
+		sinh_gdx = np.sinh(gamma[:, None] * dx)
+		Zc = (RHO0 * C0) / S
+		A = np.ones((F,), dtype=np.complex128)
+		B = np.zeros((F,), dtype=np.complex128)
+		C = np.zeros((F,), dtype=np.complex128)
+		D = np.ones((F,), dtype=np.complex128)
+		for i in range(N):
+			Ai = cosh_gdx[:, i]
+			Bi = Zc[:, i] * sinh_gdx[:, i]
+			Ci = sinh_gdx[:, i] / Zc[:, i]
+			Di = cosh_gdx[:, i]
+			A, B, C, D = A*Ai + B*Ci, A*Bi + B*Di, C*Ai + D*Ci, C*Bi + D*Di
+		return A, B, C, D
+
+	def _radiation_impedance(self, omega: np.ndarray, S_ap: float) -> np.ndarray:
+		Z0 = (RHO0 * C0) / S_ap
+		a = np.sqrt(S_ap / np.pi)
+		k = omega / C0
+		ka = np.maximum(k * a, 1e-12)
+		R = Z0 * (1.0 - np.sinc(ka / np.pi))
+		X = Z0 * ((8.0 / (3.0 * np.pi)) * ka)
+		return R + 1j * X
+
+	def _load_impedance_at_mouth(self, omega: np.ndarray) -> np.ndarray:
+		if self.mouth_load == "rigid":
+			return np.full_like(omega, np.inf + 0j)
+		if self.mouth_load == "radiation_space":
+			return self._radiation_impedance(omega, self.S_mouth)
+		if isinstance(self.mouth_load, str) and self.mouth_load not in ("", None):
+			return np.full_like(omega, np.inf + 0j)
+		return (RHO0 * C0) / self.S_mouth + 0j
+
+	def _load_impedance_at_throat(self, omega: np.ndarray) -> np.ndarray | None:
+		if self.throat_load == "rigid":
+			return np.full_like(omega, np.inf + 0j)
+		if self.throat_load == "radiation_space":
+			return self._radiation_impedance(omega, self.S_throat)
+		return None
+
+	def impedance(self, omega: np.ndarray) -> np.ndarray:
+		A, B, C, D = self._abcd_chain(omega)
+		ZL = self._load_impedance_at_mouth(omega)
+		Zin = (A * ZL + B) / (C * ZL + D)
+		Zth = self._load_impedance_at_throat(omega)
+		if Zth is not None:
+			Zin = (Zin * Zth) / (Zin + Zth)
+		return Zin
+
+	def radiation_channels(self, omega: np.ndarray, U_in: np.ndarray | None = None):
+		A, B, C, D = self._abcd_chain(omega)
+		ZL = self._load_impedance_at_mouth(omega)
+		den = (C * ZL + D)
+		den = np.where(np.abs(den) < 1e-18, 1e-18 + 0j, den)
+		H_umouth = 1.0 / den
+		out = []
+		if self.mouth_load == "radiation_space" and self.mouth_label:
+			out.append({ "label": self.mouth_label, "U": (H_umouth * U_in if U_in is not None else H_umouth) })
+		if self.throat_load == "radiation_space" and self.throat_label:
+			out.append({ "label": self.throat_label, "U": (U_in if U_in is not None else np.zeros_like(omega, dtype=complex)) })
+		return out
+

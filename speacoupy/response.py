@@ -4,7 +4,8 @@ from dataclasses import dataclass
 import numpy as np
 from .domains import Element
 from .driver import Driver
-from .acoustic import RHO0, P0, piston_directivity
+from .acoustic import piston_directivity
+from .constants import RHO0, P0
 
 @dataclass
 class ResponseResult:
