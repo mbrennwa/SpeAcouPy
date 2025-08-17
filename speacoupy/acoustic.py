@@ -173,11 +173,11 @@ from dataclasses import dataclass
 
 @dataclass
 class Horn(Acoustic):
+	L: float
+	S_throat: float
+	S_mouth: float
+	profile: str  # "con" | "exp"
 	label: str = ""
-	L: float = 0.0
-	S_throat: float = 0.0
-	S_mouth: float = 0.0
-	profile: str = "con"  # "con" | "exp"
 	mouth_load: str | None = None
 	mouth_label: str | None = None
 	throat_load: str | None = None
