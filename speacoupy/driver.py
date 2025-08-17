@@ -27,13 +27,8 @@ class DriverMechanicalBranch:
 @dataclass
 class Driver(Element):
 	def radiation_channels(self, omega, U_in=None):
-		"""Front-side channel: use front_load label and pass through U_in as flow."""
-		fl = getattr(self.motional, "front_load", None)
-		if fl is None:
-			return []
-		label = getattr(fl, "label", None) or "front"
-		U = U_in if U_in is not None else np.zeros_like(omega, dtype=complex)
-		return [ { "label": label, "U": U } ]
+		"""Not supported: the solver collects radiator channels from front/back loads symmetrically."""
+		raise NotImplementedError("Driver.radiation_channels is removed. Use front/back loads via the solver.")
 
 	Re_val: float
 	k_semi: float
