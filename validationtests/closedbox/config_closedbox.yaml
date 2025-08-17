@@ -25,7 +25,7 @@ elements:
   front_radiator_label: driver_front
   back_radiator_label: driver_back
 
-network:
+circuit:
   series:
   - WOOFER
 

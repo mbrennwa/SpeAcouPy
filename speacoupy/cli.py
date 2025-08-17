@@ -332,7 +332,7 @@ def build_registry(cfg: dict):
 def build_net(node, reg):
 	if isinstance(node, str):
 		if node not in reg:
-			raise ValueError(f"Unknown element label in network: {node}")
+			raise ValueError(f"Unknown element label in circuit: {node}")
 		return reg[node]
 	
 	### if isinstance(node, list):
@@ -340,12 +340,12 @@ def build_net(node, reg):
 	### 	return Series(parts=[build_net(x, reg) for x in node])
 	
 	if not isinstance(node, dict):
-		raise ValueError(f"Network node must be a label, list, or dict; got {type(node)}")
+		raise ValueError(f"Circuit node must be a label, list, or dict; got {type(node)}")
 	if "series" in node:
 		return Series(parts=[build_net(x, reg) for x in node["series"]])
 	if "parallel" in node:
 		return Parallel(parts=[build_net(x, reg) for x in node["parallel"]])
-	raise ValueError(f"Network dict must have 'series' or 'parallel' key; got {node}")
+	raise ValueError(f"Circuit dict must have 'series' or 'parallel' key; got {node}")
 
 def _get_global_rspace(cfg: dict) -> str:
 	val = str(cfg.get("radiation_space","")).strip().lower()
@@ -432,9 +432,9 @@ def build_system(cfg: dict):
 					raise ValueError(f"VentedBox '{lbl}' port_load references unknown label '{pl}'")
 				setattr(obj, 'mouth_radiator', reg[pl])
 
-	net_spec = cfg.get("network")
+	net_spec = cfg.get("circuit")
 	if not net_spec:
-		raise ValueError("Config must define 'network' using labels.")
+		raise ValueError("Config must define 'circuit' using labels.")
 	net = build_net(net_spec, reg)
 
 	src_spec = cfg.get("source")
