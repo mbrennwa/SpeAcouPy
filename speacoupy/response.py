@@ -26,13 +26,17 @@ def omega_logspace(fmin=10.0, fmax=20000.0, n=1000):
 class ResponseSolver:
 
 	def _sum_radiators(self, omega, U, r, loading: str, include_labels=None):
-		"""Sum radiators from driver and its back load via radiation_channels interface."""
+		"""Sum radiator channels from the driver's front and back loads, symmetrically."""
 		include_set = set(include_labels) if include_labels else None
 		k_map = {'4pi':1.0,'2pi':2.0,'1pi':4.0,'1/2pi':8.0,'0.5pi':8.0}
 		k = k_map.get((loading or '4pi').lower(), 1.0)
+
 		channels = []
-		if hasattr(self.driver, 'radiation_channels'):
-			chs = self.driver.radiation_channels(omega, U) or []
+
+		# FRONT load: drive with +U
+		front_load = getattr(self.driver.motional, 'front_load', None)
+		if front_load is not None and hasattr(front_load, 'radiation_channels'):
+			chs = front_load.radiation_channels(omega, U) or []
 			for ch in chs:
 				lbl = ch.get('label')
 				Ui = ch.get('U')
@@ -41,6 +45,8 @@ class ResponseSolver:
 				if include_set and lbl not in include_set:
 					continue
 				channels.append((lbl, Ui))
+
+		# BACK load: drive with -U (opposite phase)
 		back_load = getattr(self.driver.motional, 'back_load', None)
 		if back_load is not None and hasattr(back_load, 'radiation_channels'):
 			chs = back_load.radiation_channels(omega, -U) or []
@@ -52,6 +58,7 @@ class ResponseSolver:
 				if include_set and lbl not in include_set:
 					continue
 				channels.append((lbl, Ui))
+
 		p_total = np.zeros_like(omega, dtype=complex)
 		p_by_radiator = {}
 		for lbl, Ui in channels:

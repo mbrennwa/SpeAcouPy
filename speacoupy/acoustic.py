@@ -116,6 +116,12 @@ class RadiationPiston(Acoustic):
 	Sd: float        # diaphragm area [m^2]
 	loading: str     # boundary loading: 4pi|2pi|1pi|1/2pi|0.5pi
 
+	def radiation_channels(self, omega, U_in=None):
+		# emit a single radiator channel with the incoming acoustic volume flow
+		label = getattr(self, "label", None)
+		U = U_in if U_in is not None else np.zeros_like(omega, dtype=complex)
+		return [ { "label": label, "U": U } ]
+
 	def impedance(self, omega):
 		S = self.Sd
 		a = np.sqrt(S / np.pi)
