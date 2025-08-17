@@ -5,6 +5,7 @@ import datetime, pytz, csv
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import re
 from typing import Any, Dict
 import yaml
 
@@ -25,7 +26,6 @@ def _get_version_from_pyproject() -> str:
 		from importlib.resources import files
 		pyproj = files(__package__).joinpath("../pyproject.toml")
 		text = pyproj.read_text(encoding="utf-8")
-		import re
 		m = re.search(r'^version\s*=\s*"(.*?)"\s*$', text, re.M)
 		return m.group(1) if m else "unknown"
 	except Exception:
@@ -449,6 +449,8 @@ def build_system(cfg: dict):
 	angles = np.array(angles, dtype=float) if angles else None
 
 	loading_label = global_space
+	loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
+
 	return f, w, net, drv, Vsrc, r, loading_label, angles
 
 def main(argv=None):
