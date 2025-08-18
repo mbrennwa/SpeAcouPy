@@ -12,6 +12,8 @@ elements:
   profile: exponential
   mouth_load: radiation_space     # radiate into space
   mouth_label: HORN_MOUTH
+  R_mouth: 10
+  R_throat: 10
 
 - type: driver
   label: DRIVER
@@ -25,8 +27,8 @@ elements:
   front_load: radiation_space
   ##  front_load: CLOSEDCHAMBER
   back_load: HORN
-  front_radiator_label: driver_front
-  back_radiator_label: driver_back
+  front_radiator_label: DRIVER_FRONT
+  back_radiator_label: DRIVER_BACK
 
 circuit:
   series:

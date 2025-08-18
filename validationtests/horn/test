@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+
+import subprocess
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# simulate Faital 12PR320:
+subprocess.run([
+    "speacoupy",
+    "config_horn.yaml",
+    "--csv",
+    "--pdf",
+    "--prefix", "SpeAcouPy_output"
+])
+
+
+### IMPEDANCE: COMPARE WITH VITUIX SIMULATED CURVE
+
+# load simulated data:
+speacoupy = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
+
+# load measured impedance curve:
+ajhorn = pd.read_csv("ajhorn/SpeAcouPy_ref_AJhorn_response.txt", header=[0, 1], sep="\t")
+
+# plot impedance curves and save to PDF:
+plt.figure()
+plt.plot(speacoupy["Frequency (Hz)"], speacoupy["Impedance Magnitude (Ω)"], label="SpeAcouPy")
+plt.plot(ajhorn["f"], ajhorn["Zel"], label="AJ Horn", linestyle="--")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Impedance (Ohm)")
+plt.title("Horn electrical impedance")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("IMPEDANCE_COMPARISON.pdf", format="pdf")
+plt.close()
+
+
+# plot SPL curves and save to PDF:
+plt.figure()
+plt.plot(speacoupy["Frequency (Hz)"], speacoupy["SPL (dB-SPL @ 1m / 2pi)"], label="SpeAcouPy")
+plt.plot(ajhorn["f"], ajhorn["SPL"], label="AJ Horn", linestyle="--")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("SPL (dB-SPL)")
+plt.title("SPL Horn (1m/2pi)")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("SPL_COMPARISON.pdf", format="pdf")
+plt.close()
+

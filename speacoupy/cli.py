@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any, Dict
 import yaml
+from importlib.resources import files
 
 from . import (
 	omega_logspace, Net, Series, Parallel,
@@ -25,7 +26,6 @@ from .response import ResponseSolver
 
 def _get_version_from_pyproject() -> str:
 	try:
-		from importlib.resources import files
 		pyproj = files(__package__).joinpath("../pyproject.toml")
 		text = pyproj.read_text(encoding="utf-8")
 		m = re.search(r'^version\s*=\s*"(.*?)"\s*$', text, re.M)
@@ -215,7 +215,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		return RadiationPiston(Sd=Sd_final, loading=loading)
 	
 	if t == "horn":
-		for kreq in ("L", "S_throat", "S_mouth", "profile"):
+		for kreq in ("L", "S_throat", "S_mouth", "profile", "R_throat", "R_mouth"):
 			if kreq not in spec:
 				raise KeyError(f"horn: missing required key '{kreq}'")
 		profile = str(spec["profile"]).lower()
@@ -223,7 +223,21 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		mouth_label = spec.get("mouth_label", None)
 		throat_load = spec.get("throat_load", None)
 		throat_label = spec.get("throat_label", None)
-		allowed = {"type","label","L","S_throat","S_mouth","profile","mouth_load","mouth_label","throat_load","throat_label"}
+
+		# REQUIRED stuffing losses (Rb-style units, Pa·s/m^3)
+		try:
+			R_throat = float(spec["R_throat"])
+			R_mouth  = float(spec["R_mouth"])
+		except Exception:
+			raise ValueError("horn: R_throat and R_mouth must be numbers (Pa·s/m^3)")
+		if R_throat < 0.0 or R_mouth < 0.0:
+			raise ValueError("horn: R_throat and R_mouth must be ≥ 0 (Pa·s/m^3)")
+
+		allowed = {
+			"type","label","L","S_throat","S_mouth","profile",
+			"mouth_load","mouth_label","throat_load","throat_label",
+			"R_throat","R_mouth"
+		}
 		unknown = set(spec.keys()) - allowed
 		if unknown:
 			raise KeyError(f"horn: unknown keys: {sorted(unknown)}")
@@ -233,6 +247,8 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 			S_throat=float(spec["S_throat"]),
 			S_mouth=float(spec["S_mouth"]),
 			profile=profile,
+			R_throat=R_throat,
+			R_mouth=R_mouth,
 			mouth_load=mouth_load,
 			mouth_label=mouth_label,
 			throat_load=throat_load,
@@ -351,7 +367,6 @@ def build_registry(cfg: dict):
 		reg[lab] = drv
 
 	# Make sure there is exactly one driver
-	from .driver import Driver as DriverClass
 	drivers = [k for k,v in reg.items() if isinstance(v, DriverClass)]
 	if len(drivers) != 1:
 		raise ValueError(f"Expected exactly one driver, found: {drivers}")
@@ -528,3 +543,4 @@ def main(argv=None):
 
 if __name__ == "__main__":
 	raise SystemExit(main())
+
