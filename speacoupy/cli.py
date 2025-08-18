@@ -477,8 +477,6 @@ def build_system(cfg: dict):
 	angles = np.array(angles, dtype=float) if angles else None
 
 	loading_label = global_space
-	loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
-
 	return f, w, net, drv, Vsrc, r, loading_label, angles
 
 def main(argv=None):
@@ -510,15 +508,16 @@ def main(argv=None):
 	# PLOTS
 	for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
 		if enabled:
+			pretty_loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
 			plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
-					title=f"On-axis SPL (1 m / {loading_label})")
+					title=f"On-axis SPL (1 m / {pretty_loading_label})")
 			plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"))
 			if res.SPL_offaxis is not None and res.angles_deg is not None:
 				curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
 				labels = [f"{ang:.0f}°" for ang in res.angles_deg]
 				plot_spl_multi(res.f, curves, labels,
 							outfile=os.path.join(args.outdir, f"{pre}SPL_angles.{fmt}"),
-							title=f"SPL vs angle (1 m / {loading_label})")
+							title=f"SPL vs angle (1 m / {pretty_loading_label})")
 			outputs.append(fmt.upper())
 	# CSV output
 	if args.csv:

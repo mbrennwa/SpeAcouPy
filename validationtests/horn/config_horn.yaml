@@ -1,6 +1,6 @@
 # simulation of a driver with its front radiating into free space back into a horn
 
-radiation_space: 1/2asd
+radiation_space: 2pi
 
 elements:
 

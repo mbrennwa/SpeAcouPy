@@ -1,38 +1,36 @@
+# simulation of a driver with its front radiating into free space back into a horn
+
 radiation_space: 2pi
 
 elements:
 
-- type: sealed_box
-  label: CLOSEDBOX
-  Vb: 0.025     # m³  (25 liters internal volume)
-  Rb: 4.75E5    # mechanical resistance (Pa·s/m³)
-
 - type: horn
   label: HORN
-  L: 0.8               # length in meters
-  S_throat: 0.005      # throat area in m²
-  S_mouth: 0.15        # mouth area in m²
-  profile: con         # conical profile
-  mouth_load: radiation_space
-  mouth_label: horn_mouth
+  L: 0.8
+  S_throat: 200E-4      # m²
+  S_mouth:  400E-4      # m²
+  profile: exponential
+  mouth_load: radiation_space     # radiate into space
+  mouth_label: HORN_MOUTH
 
 - type: driver
-  label: WOOFER
-  fs: 40.1
-  Vas: 0.1133
-  Qms: 11
-  Qes: 0.42
-  Sd: 0.0539
-  Re: 5.4
-  Z_hf: [ [1250,9.67] , [2500,14.45] , [5000,19.17] , [10238,29.4] , [20000,44.21] ]
-  front_load: HORN
-  back_load: CLOSEDBOX
+  label: DRIVER
+  fs: 35.0
+  Vas: 60e-3
+  Qms: 3.5
+  Qes: 0.35
+  Sd: 200E-4
+  Re: 8.0
+  Z_hf: [ [1E3,9.0] , [1E4,20]]
+  front_load: radiation_space
+  ##  front_load: CLOSEDCHAMBER
+  back_load: HORN
   front_radiator_label: driver_front
   back_radiator_label: driver_back
 
 circuit:
   series:
-  - WOOFER
+  - DRIVER
 
 frequency:
   min: 5
@@ -41,4 +39,3 @@ frequency:
 
 source:
   volts_rms: 2.83
-
