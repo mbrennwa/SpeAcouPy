@@ -176,22 +176,27 @@ class Horn(Acoustic):
 	L: float
 	S_throat: float
 	S_mouth: float
-	profile: str  # "con" | "exp"
+	profile: str  # "conical" | "exponential" | "parabolic"
 	label: str = ""
 	mouth_load: str | None = None
 	mouth_label: str | None = None
 	throat_load: str | None = None
 	throat_label: str | None = None
 
-	_m: float | None = None  # derived for exp
+	_m: float | None = None  # derived for exponential
 
 	def __post_init__(self) -> None:
-		self.profile = (self.profile or "con").lower()
-		if self.profile not in ("con", "exp"):
-			raise ValueError("Horn.profile must be 'con' or 'exp'")
+		if self.profile.lower() in ("conic", "conical"):
+			self.profile = "con"
+		elif self.profile.lower() in ("parabolic", "parabolical"):
+			self.profile = "para"
+		elif self.profile.lower() == "exponential":
+			self.profile = "exp"
+		else:
+			raise ValueError("Horn.profile must be 'conical', 'exponential', or 'parabolic'.")
 		if self.L <= 0 or self.S_throat <= 0 or self.S_mouth <= 0:
 			raise ValueError("Horn: L, S_throat, S_mouth must be > 0")
-		if self.profile == "exp":
+		if self.profile == "exponential":
 			self._m = np.log(self.S_mouth / self.S_throat) / self.L
 		else:
 			self._m = None
@@ -202,9 +207,17 @@ class Horn(Acoustic):
 
 	def _area(self, x: np.ndarray) -> np.ndarray:
 		if self.profile == "con":
+			s0 = np.sqrt(S_throat)
+			sL = np.sqrt(S_mouth)
+			s  = s0 + (sL - s0) * (x / L)
+			return s * s
+		elif self.profile == "exp":
+			return self.S_throat * np.exp((self._m or 0.0) * x)
+		elif self.profile == "para":
 			return self.S_throat + (self.S_mouth - self.S_throat) * (x / self.L)
-		return self.S_throat * np.exp((self._m or 0.0) * x)
-
+		else:
+			raise ValueError("Horn: horn profile " + self.profile + " is unknown.")
+			
 	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
 		F = omega.size
 		dx = self.L / N

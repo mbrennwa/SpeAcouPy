@@ -1,6 +1,6 @@
 # simulation of a Faital 12PR320 woofer in a closed box. Woofer TSP as in validation/driver/...
 
-radiation_space: 2pi
+radiation_space: 1/2pi
 
 elements:
 

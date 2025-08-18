@@ -40,6 +40,7 @@ def plot_impedance(f: np.ndarray, Zin: np.ndarray, outfile: str | None = None, t
 	ax1.set_xlabel("Frequency (Hz)")
 	ax1.set_ylabel("Magnitude (Ω)")
 	ax1.grid(True, which="both", ls=":")
+	ax1.set_ylim(bottom=0)
 	ax1.set_title(title)
 
 	ax2 = ax1.twinx()

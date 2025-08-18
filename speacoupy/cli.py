@@ -219,8 +219,6 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 			if kreq not in spec:
 				raise KeyError(f"horn: missing required key '{kreq}'")
 		profile = str(spec["profile"]).lower()
-		if profile not in ("con", "exp"):
-			raise ValueError("horn.profile must be 'con' or 'exp'")
 		mouth_load = spec.get("mouth_load", None)
 		mouth_label = spec.get("mouth_label", None)
 		throat_load = spec.get("throat_load", None)
