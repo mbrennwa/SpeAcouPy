@@ -7,17 +7,17 @@ import matplotlib.pyplot as plt
 # simulate Faital 12PR320:
 subprocess.run([
     "speacoupy",
-    "config_horn.yaml",
+    "config_horn_AJHORN.yaml",
     "--csv",
     "--pdf",
-    "--prefix", "SpeAcouPy_output"
+    "--prefix", "SpeAcouPy_output_forAJ"
 ])
 
 
 ### IMPEDANCE: COMPARE WITH VITUIX SIMULATED CURVE
 
 # load simulated data:
-speacoupy = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
+speacoupy = pd.read_csv("SpeAcouPy_output_forAJ_DATA.csv", sep=",", comment="#")
 
 # load measured impedance curve:
 ajhorn = pd.read_csv("ajhorn/SpeAcouPy_ref_AJhorn_response.txt", header=[0, 1], sep="\t")

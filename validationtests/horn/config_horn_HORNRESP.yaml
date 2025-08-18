@@ -8,12 +8,17 @@ elements:
   label: HORN
   L: 0.8
   S_throat: 200E-4      # m²
-  S_mouth:  400E-4      # m²
+  S_mouth:  2000E-4      # m²
   profile: exponential
   mouth_load: radiation_space     # radiate into space
   mouth_label: HORN_MOUTH
-  R_mouth: 10
-  R_throat: 10
+  R_mouth: 0
+  R_throat: 100
+
+- type: sealed_box
+  label: CLOSEDCHAMBER
+  Vb: 10E-3
+  Rb: 1E5
 
 - type: driver
   label: DRIVER
@@ -24,9 +29,8 @@ elements:
   Sd: 200E-4
   Re: 8.0
   Z_hf: [ [1E3,9.0] , [1E4,20]]
-  front_load: radiation_space
-  ##  front_load: CLOSEDCHAMBER
-  back_load: HORN
+  front_load: HORN
+  back_load: CLOSEDCHAMBER
   front_radiator_label: DRIVER_FRONT
   back_radiator_label: DRIVER_BACK
 
