@@ -7,20 +7,18 @@ import matplotlib.pyplot as plt
 # simulate Faital 12PR320:
 subprocess.run([
     "speacoupy",
-    "config_horn_AJHORN.yaml",
+    "config_transmissionline.yaml",
     "--csv",
     "--pdf",
-    "--prefix", "SpeAcouPy_output_forAJ"
+    "--prefix", "SpeAcouPy_output"
 ])
 
 
-### IMPEDANCE: COMPARE WITH VITUIX SIMULATED CURVE
-
 # load simulated data:
-speacoupy = pd.read_csv("SpeAcouPy_output_forAJ_DATA.csv", sep=",", comment="#")
+speacoupy = pd.read_csv("SpeAcouPy_output_DATA.csv", sep=",", comment="#")
 
 # load measured impedance curve:
-ajhorn = pd.read_csv("ajhorn/SpeAcouPy_ref_AJhorn_response.txt", header=[0, 1], sep="\t")
+ajhorn = pd.read_csv("AJhorn_response.txt", header=[0, 1], sep="\t")
 
 # plot impedance curves and save to PDF:
 plt.figure()
@@ -28,7 +26,7 @@ plt.plot(speacoupy["Frequency (Hz)"], speacoupy["Impedance Magnitude (Ω)"], lab
 plt.plot(ajhorn["f"], ajhorn["Zel"], label="AJ Horn", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("Impedance (Ohm)")
-plt.title("Horn electrical impedance")
+plt.title("Transmission line electrical impedance")
 plt.grid(True)
 plt.legend()
 plt.xscale("log")
@@ -42,10 +40,9 @@ plt.plot(speacoupy["Frequency (Hz)"], speacoupy["SPL (dB-SPL @ 1m / 2pi)"], labe
 plt.plot(ajhorn["f"], ajhorn["SPL"], label="AJ Horn", linestyle="--")
 plt.xlabel("Frequency (Hz)")
 plt.ylabel("SPL (dB-SPL)")
-plt.title("SPL Horn (1m/2pi)")
+plt.title("Transmissionline SPL (1m/2pi)")
 plt.grid(True)
 plt.legend()
 plt.xscale("log")
 plt.savefig("SPL_COMPARISON.pdf", format="pdf")
 plt.close()
-
