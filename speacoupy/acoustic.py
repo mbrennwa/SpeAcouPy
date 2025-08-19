@@ -274,71 +274,113 @@ class Horn(Acoustic):
 		return A, B, C, D
 		
 		
-		
+
+
+
+
+
+
 	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
 		"""
-		Segmented horn transfer (ABCD) using a symmetric area-transformer + short-cylinder
-		per slice. Works for any flare profile via S(x); includes distributed series losses.
+		ABCD chain for arbitrary flares using piecewise **conical frusta** (spherical-wave exact),
+		with cylindrical fallback for vanishing slope, and per-slice series stuffing.
 
 		Returns:
 			A, B, C, D : 1D complex arrays (len = len(omega))
 		"""
-		# Frequencies and discretization
 		F = omega.size
 		N = max(1, int(N))
-		dx = self.L / N
+		k = omega / C0
+		ell = self.L / N
 
-		# Node positions and areas S_i at x_i
+		# Node positions and cross-sectional areas at boundaries
 		x_nodes = np.linspace(0.0, self.L, N + 1)
-		S_nodes = self._area(x_nodes)  # shape (N+1,)
+		S_nodes = self._area(x_nodes)
+		S_nodes = np.maximum(S_nodes, 1e-30)
 
-		# Wavenumber
-		k = omega / C0  # shape (F,)
+		# Slice centers and linear stuffing profile R(x) (Pa·s/m^3)
+		if self.L > 0.0:
+			xc = 0.5 * (x_nodes[:-1] + x_nodes[1:])
+			Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / self.L)
+		else:
+			Rx = np.zeros(N, dtype=float)
 
 		# Initialize running ABCD per frequency (identity)
-		A = np.ones((F,), dtype=np.complex128)
-		B = np.zeros((F,), dtype=np.complex128)
-		C = np.zeros((F,), dtype=np.complex128)
-		D = np.ones((F,), dtype=np.complex128)
+		A_tot = np.ones((F,), dtype=np.complex128)
+		B_tot = np.zeros((F,), dtype=np.complex128)
+		C_tot = np.zeros((F,), dtype=np.complex128)
+		D_tot = np.ones((F,), dtype=np.complex128)
 
-		# Series loss (Pa·s/m^3) sampled at slice centers
-		xc = 0.5 * (x_nodes[:-1] + x_nodes[1:])
-		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
+		# Relative tolerance for "cylindrical" detection
+		rel_tol = 1e-6
 
 		for i in range(N):
-			# End areas and geometric-mean area for the slice
-			Si = float(max(S_nodes[i], 1e-30))
-			Sj = float(max(S_nodes[i + 1], 1e-30))
-			Smid = (Si * Sj) ** 0.5
+			S1 = float(S_nodes[i])
+			S2 = float(S_nodes[i + 1])
+			a1 = np.sqrt(S1 / np.pi)
+			a2 = np.sqrt(S2 / np.pi)
 
-			# Characteristic impedance at Smid
-			Zc = (RHO0 * C0) / Smid  # scalar
+			# Decide frustum vs cylinder
+			is_cyl = (abs(a2 - a1) <= rel_tol * max(a1, 1e-12))
 
-			# Pre-transformer: Si -> Smid  (n1 = sqrt(Smid/Si))
-			n1 = (Smid / Si) ** 0.5
-			A, B, C, D = A * n1, B * (1.0 / n1), C * n1, D * (1.0 / n1)
+			if is_cyl:
+				# Cylindrical slice: standard plane-wave two-port at S_mid
+				S_mid = (S1 * S2) ** 0.5
+				Zc = (RHO0 * C0) / S_mid  # scalar
+				delta = k * ell           # (F,)
+				cosd = np.cos(delta)
+				sind = np.sin(delta)
+				A = cosd
+				B = 1j * Zc * sind
+				C = 1j * (sind / Zc)
+				D = cosd
+			else:
+				# Conical frustum slice: exact spherical-wave two-port
+				alpha = (a2 - a1) / ell  # slope of radius
+				R1 = a1 / alpha          # distance to apex from plane 1
+				R2 = R1 + ell            # distance to apex from plane 2
 
-			# Uniform short cylinder of length dx and area Smid
-			cos = np.cos(k * dx)           # (F,)
-			jsin = 1j * np.sin(k * dx)     # (F,)
-			Ai = cos
-			Bi = jsin * Zc
-			Ci = jsin / Zc
-			Di = cos
-			A, B, C, D = A * Ai + B * Ci, A * Bi + B * Di, C * Ai + D * Ci, C * Bi + D * Di
+				Zstar = (RHO0 * C0) / np.sqrt(S1 * S2)  # uses geometric mean area
+				delta = k * (R2 - R1)                   # = k * ell
 
-			# Post-transformer: Smid -> Sj  (n2 = sqrt(Sj/Smid))
-			n2 = (Sj / Smid) ** 0.5
-			A, B, C, D = A * n2, B * (1.0 / n2), C * n2, D * (1.0 / n2)
+				kr1 = k * R1
+				kr2 = k * R2
+				# Guard against tiny denominators (shouldn't happen unless nearly cylindrical)
+				kr1 = np.where(np.abs(kr1) < 1e-18, 1e-18 + 0j, kr1)
+				kr2 = np.where(np.abs(kr2) < 1e-18, 1e-18 + 0j, kr2)
 
-			# Series stuffing resistance for this slice (placed at the slice end)
-			Ri = (Rx[i] * dx) / Smid  # Pa·s/m^3 → Pa·s/m^3 per slice in series
-			B = B + A * Ri
-			D = D + C * Ri
+				sind = np.sin(delta)
+				cosd = np.cos(delta)
 
-		return A, B, C, D
-	
-	
+				A = (sind + kr1 * cosd) / kr2
+				B = -1j * Zstar * sind
+				C = -1j / Zstar * (
+					sind * (1.0 + 1.0 / (kr1 * kr2))
+					+ (R1 - R2) * cosd / (kr1 * kr2)
+				)
+				D = (kr2 * cosd - sind) / kr1
+
+			# Series stuffing for this slice in (p,U): Rs = R(x)*ell / S_mid
+			S_mid = (S1 * S2) ** 0.5
+			Rs = (Rx[i] * ell) / S_mid
+			if Rs != 0.0:
+				# Right-multiply by [[1, Rs], [0, 1]]
+				B = B + A * Rs
+				D = D + C * Rs
+
+			# Cascade this slice: M_tot ← M_tot @ M_slice
+			A_new = A_tot * A + B_tot * C
+			B_new = A_tot * B + B_tot * D
+			C_new = C_tot * A + D_tot * C
+			D_new = C_tot * B + D_tot * D
+
+			A_tot, B_tot, C_tot, D_tot = A_new, B_new, C_new, D_new
+
+		return A_tot, B_tot, C_tot, D_tot
+
+
+
+
 	
 	
 	
