@@ -10,19 +10,13 @@ from typing import Any, Dict
 import yaml
 from importlib.resources import files
 
-from . import (
-	omega_logspace, Net, Series, Parallel,
-	Ce, Le, Re,
-	Driver, DriverMechanicalBranch,
-	RadiationPiston, Port, SealedBox, VentedBox,
-)
-
-from .acoustic import Horn
-from .acoustic import RadiationPiston
-from .plotting import plot_impedance, plot_spl, plot_spl_multi
+from .acoustic import RadiationPiston, Port, SealedBox, VentedBox, Horn
 from .constants import PROGRAMNAME, TWOPI, RHO0, C0, FARFIELD_DIST_M
-from .driver import Driver as DriverClass
-from .response import ResponseSolver
+from .domains import Net, Series, Parallel
+from .driver import Driver, DriverMechanicalBranch
+from .electrical import Ce, Le, Re
+from .plotting import plot_impedance, plot_spl, plot_spl_multi
+from .response import omega_logspace, ResponseSolver
 
 def _get_version_from_pyproject() -> str:
 	try:
@@ -367,7 +361,7 @@ def build_registry(cfg: dict):
 		reg[lab] = drv
 
 	# Make sure there is exactly one driver
-	drivers = [k for k,v in reg.items() if isinstance(v, DriverClass)]
+	drivers = [k for k,v in reg.items() if isinstance(v, Driver)]
 	if len(drivers) != 1:
 		raise ValueError(f"Expected exactly one driver, found: {drivers}")
 	return reg, drivers[0]
@@ -429,7 +423,7 @@ def build_system(cfg: dict):
 	# Driver front/back placeholders
 	drv = None
 	for v in reg.values():
-		if isinstance(v, DriverClass):
+		if isinstance(v, Driver):
 			drv = v
 			break
 	if drv is None:
