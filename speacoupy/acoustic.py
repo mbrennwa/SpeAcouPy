@@ -280,6 +280,7 @@ class Horn(Acoustic):
 
 
 
+
 	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
 		"""
 		ABCD chain for arbitrary flares using piecewise **conical frusta** (spherical-wave exact),
@@ -377,7 +378,6 @@ class Horn(Acoustic):
 			A_tot, B_tot, C_tot, D_tot = A_new, B_new, C_new, D_new
 
 		return A_tot, B_tot, C_tot, D_tot
-
 
 
 

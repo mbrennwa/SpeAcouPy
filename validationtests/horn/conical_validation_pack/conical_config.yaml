@@ -1,0 +1,10 @@
+horn:
+  type: horn
+  label: H1
+  L: 0.30
+  S_throat: 0.0012566370614359172
+  S_mouth: 0.12566370614359174
+  profile: con
+  R_throat: 0.0
+  R_mouth: 0.0
+  mouth_load: rigid

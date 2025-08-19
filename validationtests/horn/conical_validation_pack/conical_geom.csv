@@ -1,0 +1,6 @@
+param,value,units
+L,0.30,m
+r_throat,0.02,m
+r_mouth,0.20,m
+S_throat,0.0012566370614359172,m^2
+S_mouth,0.12566370614359174,m^2
