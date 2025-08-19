@@ -30,7 +30,7 @@ elements:
   Re: 8.0
   Z_hf: [ [1E3,9.0] , [1E4,20]]
   front_load: HORN
-  back_load: radiation_space
+  back_load: CLOSEDCHAMBER
   front_radiator_label: DRIVER_FRONT
   back_radiator_label: DRIVER_BACK
 

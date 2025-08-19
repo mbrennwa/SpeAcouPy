@@ -227,7 +227,7 @@ class Horn(Acoustic):
 		else:
 			raise ValueError(f"Horn: unknown horn profile '{self.profile}'.")
 
-	def _abcd_chain(self, omega: np.ndarray, N: int = 5000):
+	def _abcd_chainOLD(self, omega: np.ndarray, N: int = 64):
 		F = omega.size
 		N = max(1, int(N))
 		dx = self.L / N
@@ -243,6 +243,9 @@ class Horn(Acoustic):
 		# stuffing resistance interpolated linearly along x at slice centers
 		xc = (x_nodes[:-1] + x_nodes[1:]) * 0.5
 		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
+		
+		print(N)
+		
 		for i in range(N):
 			Si = max(S_nodes[i], 1e-30)
 			Sj = max(S_nodes[i+1], 1e-30)
@@ -259,6 +262,9 @@ class Horn(Acoustic):
 			A, B, C, D = A*Ai + B*Ci, A*Bi + B*Di, C*Ai + D*Ci, C*Bi + D*Di
 			# Ideal acoustic transformer for area change Si -> Sj (n = sqrt(Sj/Si))
 			n = (Sj / Si) ** 0.5
+			
+			
+			
 			# Right-multiply by [[n,0],[0,1/n]]
 			A, B, C, D = A*n, B*(1.0/n), C*n, D*(1.0/n)
 			# Series stuffing resistance for this slice: Ri = R(x)*dx / Smid
@@ -266,6 +272,76 @@ class Horn(Acoustic):
 			B = B + A * Ri
 			D = D + C * Ri
 		return A, B, C, D
+		
+		
+		
+	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
+		"""
+		Segmented horn transfer (ABCD) using a symmetric area-transformer + short-cylinder
+		per slice. Works for any flare profile via S(x); includes distributed series losses.
+
+		Returns:
+			A, B, C, D : 1D complex arrays (len = len(omega))
+		"""
+		# Frequencies and discretization
+		F = omega.size
+		N = max(1, int(N))
+		dx = self.L / N
+
+		# Node positions and areas S_i at x_i
+		x_nodes = np.linspace(0.0, self.L, N + 1)
+		S_nodes = self._area(x_nodes)  # shape (N+1,)
+
+		# Wavenumber
+		k = omega / C0  # shape (F,)
+
+		# Initialize running ABCD per frequency (identity)
+		A = np.ones((F,), dtype=np.complex128)
+		B = np.zeros((F,), dtype=np.complex128)
+		C = np.zeros((F,), dtype=np.complex128)
+		D = np.ones((F,), dtype=np.complex128)
+
+		# Series loss (Pa·s/m^3) sampled at slice centers
+		xc = 0.5 * (x_nodes[:-1] + x_nodes[1:])
+		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
+
+		for i in range(N):
+			# End areas and geometric-mean area for the slice
+			Si = float(max(S_nodes[i], 1e-30))
+			Sj = float(max(S_nodes[i + 1], 1e-30))
+			Smid = (Si * Sj) ** 0.5
+
+			# Characteristic impedance at Smid
+			Zc = (RHO0 * C0) / Smid  # scalar
+
+			# Pre-transformer: Si -> Smid  (n1 = sqrt(Smid/Si))
+			n1 = (Smid / Si) ** 0.5
+			A, B, C, D = A * n1, B * (1.0 / n1), C * n1, D * (1.0 / n1)
+
+			# Uniform short cylinder of length dx and area Smid
+			cos = np.cos(k * dx)           # (F,)
+			jsin = 1j * np.sin(k * dx)     # (F,)
+			Ai = cos
+			Bi = jsin * Zc
+			Ci = jsin / Zc
+			Di = cos
+			A, B, C, D = A * Ai + B * Ci, A * Bi + B * Di, C * Ai + D * Ci, C * Bi + D * Di
+
+			# Post-transformer: Smid -> Sj  (n2 = sqrt(Sj/Smid))
+			n2 = (Sj / Smid) ** 0.5
+			A, B, C, D = A * n2, B * (1.0 / n2), C * n2, D * (1.0 / n2)
+
+			# Series stuffing resistance for this slice (placed at the slice end)
+			Ri = (Rx[i] * dx) / Smid  # Pa·s/m^3 → Pa·s/m^3 per slice in series
+			B = B + A * Ri
+			D = D + C * Ri
+
+		return A, B, C, D
+	
+	
+	
+	
+	
 
 
 	def _radiation_impedance(self, omega: np.ndarray, S_ap: float) -> np.ndarray:
