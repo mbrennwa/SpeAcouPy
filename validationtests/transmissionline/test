@@ -9,7 +9,6 @@ subprocess.run([
     "speacoupy",
     "config_transmissionline.yaml",
     "--csv",
-    "--pdf",
     "--prefix", "SpeAcouPy_output"
 ])
 
@@ -31,6 +30,7 @@ plt.grid(True)
 plt.legend()
 plt.xscale("log")
 plt.savefig("IMPEDANCE_COMPARISON.pdf", format="pdf")
+plt.savefig("IMPEDANCE_COMPARISON.png", format="png")
 plt.close()
 
 
@@ -45,4 +45,5 @@ plt.grid(True)
 plt.legend()
 plt.xscale("log")
 plt.savefig("SPL_COMPARISON.pdf", format="pdf")
+plt.savefig("SPL_COMPARISON.png", format="png")
 plt.close()
