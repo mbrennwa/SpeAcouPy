@@ -227,48 +227,52 @@ class Horn(Acoustic):
 		else:
 			raise ValueError(f"Horn: unknown horn profile '{self.profile}'.")
 
-	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
+	def _abcd_chain(self, omega: np.ndarray, N: int = 5000):
 		F = omega.size
+		N = max(1, int(N))
 		dx = self.L / N
-		xc = (np.arange(N) + 0.5) * dx
-		S = self._area(xc)[None, :]              # (1,N) → broadcast with (F,1)
-		gamma = 1j * omega / C0                  # (F,)
-		cosh_gdx = np.cosh(gamma * dx)           # (F,)
-		sinh_gdx = np.sinh(gamma * dx)           # (F,)
-		Zc = (RHO0 * C0) / S                     # (F,N)
-
-		# stuffing resistance (Pa·s/m³) linearly interpolated along x
-		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / self.L)  # (N,)
-
+		# Node positions (0..L) and corresponding areas
+		x_nodes = np.linspace(0.0, self.L, N + 1)
+		S_nodes = self._area(x_nodes)  # (N+1,)
+		k = omega / C0  # (F,)
+		# Initialize total ABCD as identity per frequency
 		A = np.ones((F,), dtype=np.complex128)
 		B = np.zeros((F,), dtype=np.complex128)
 		C = np.zeros((F,), dtype=np.complex128)
 		D = np.ones((F,), dtype=np.complex128)
-
+		# stuffing resistance interpolated linearly along x at slice centers
+		xc = (x_nodes[:-1] + x_nodes[1:]) * 0.5
+		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
 		for i in range(N):
-			# ideal uniform slice
-			Ai = cosh_gdx
-			Bi = Zc[:, i] * sinh_gdx
-			Ci = sinh_gdx / Zc[:, i]
-			Di = cosh_gdx
+			Si = max(S_nodes[i], 1e-30)
+			Sj = max(S_nodes[i+1], 1e-30)
+			Smid = (Si * Sj) ** 0.5
+			Zc = (RHO0 * C0) / Smid  # scalar
+			# Uniform cylinder of length dx and area Smid
+			cos = np.cos(k * dx)
+			jsin = 1j * np.sin(k * dx)
+			Ai = cos
+			Bi = jsin * Zc
+			Ci = jsin / Zc
+			Di = cos
+			# Right-multiply current total by cylinder segment
 			A, B, C, D = A*Ai + B*Ci, A*Bi + B*Di, C*Ai + D*Ci, C*Bi + D*Di
-
-			# series stuffing for slice i: Ri = R(x_i)*dx / S_i  (Pa·s/m³)
-			Ri = (Rx[i] * dx) / S[:, i]  # (F,)
-			# right-multiply by series matrix [[1, Ri],[0,1]]”
+			# Ideal acoustic transformer for area change Si -> Sj (n = sqrt(Sj/Si))
+			n = (Sj / Si) ** 0.5
+			# Right-multiply by [[n,0],[0,1/n]]
+			A, B, C, D = A*n, B*(1.0/n), C*n, D*(1.0/n)
+			# Series stuffing resistance for this slice: Ri = R(x)*dx / Smid
+			Ri = (Rx[i] * dx) / Smid
 			B = B + A * Ri
 			D = D + C * Ri
-
 		return A, B, C, D
 
+
 	def _radiation_impedance(self, omega: np.ndarray, S_ap: float) -> np.ndarray:
-		Z0 = (RHO0 * C0) / S_ap
-		a = np.sqrt(S_ap / np.pi)
-		k = omega / C0
-		ka = np.maximum(k * a, 1e-12)
-		R = Z0 * (1.0 - np.sinc(ka / np.pi))
-		X = Z0 * ((8.0 / (3.0 * np.pi)) * ka)
-		return R + 1j * X
+		# Wideband baffled piston radiation impedance at the aperture area.
+		Rp = RadiationPiston(Sd=S_ap, loading='4pi')  # assume horn mouth is "free", no baffle, so 4pi
+		return Rp.impedance(omega)
+
 
 	def _load_impedance_at_mouth(self, omega: np.ndarray) -> np.ndarray:
 		if self.mouth_load == "rigid":
