@@ -230,7 +230,7 @@ class Horn(Acoustic):
 	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
 	
 	
-		print('***** acoustic.py / _abcd_chain: replace this code for arbitrary horn profiles by exact solutions for the conventional flare functions!')
+		print('***** acoustic.py / _abcd_chain: this might give accurate results for flared horns. Consider replacing this code for arbitrary horn profiles by exact solutions for the conventional flare functions!')
 	
 		F = omega.size
 		N = max(1, int(N))
@@ -250,9 +250,7 @@ class Horn(Acoustic):
 		# stuffing resistance interpolated linearly along x at slice centers
 		xc = (x_nodes[:-1] + x_nodes[1:]) * 0.5
 		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
-		
-		print(N)
-		
+				
 		for i in range(N):
 			Si = max(S_nodes[i], 1e-30)
 			Sj = max(S_nodes[i+1], 1e-30)
