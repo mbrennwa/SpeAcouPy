@@ -170,165 +170,167 @@ class RadiationSpace:
 
 @dataclass
 class Horn(Acoustic):
+	"""
+	Simplified horn element — **conical only** (exact algebraic solution).
+
+	This step intentionally supports only conical flares. Other profiles will be
+	added later.
+
+	Notes
+	-----
+	• **No implicit default mouth termination.** Either set an explicit `mouth_load` that
+	  resolves locally (e.g. "rigid" or "radiation_space"), or pass `ZL_external` to
+	  `impedance(omega, ZL_external=...)`. If neither is provided, `impedance()` raises.
+	"""
 	L: float
 	S_throat: float
 	S_mouth: float
-	profile: str  # "conical" | "exponential" | "parabolic"
-	R_throat: float = 0.0          # Pa·s/m³ (required)
-	R_mouth: float = 0.0           # Pa·s/m³ (required)
-	mouth_load: str | None = None
-	mouth_label: str | None = None
-	throat_load: str | None = None
-	throat_label: str | None = None
+	profile: str
+	R_throat: float = 0.0
+	R_mouth: float = 0.0
+	throat_load: Optional[str] = None
+	throat_label: Optional[str] = None
+	mouth_load: Optional[str] = None
+	mouth_label: Optional[str] = None
+	mouth_loading: str = "4pi"
+	throat_loading: str = "4pi"
 	label: str = ""
 
-	_m: float | None = None  # derived for exponential
-
+	# -------------------------- Validation / setup -------------------------- #
 	def __post_init__(self) -> None:
-		# normalize profile
-		if self.profile.lower() in ("conic", "conical", "con"):
+		p = (self.profile or "").strip().lower()
+		if p in ("con", "conical", "cone"):
 			self.profile = "con"
-		elif self.profile.lower() in ("parabolic", "parabolical", "para"):
-			self.profile = "para"
-		elif self.profile.lower() in ("exponential", "exp"):
-			self.profile = "exp"
 		else:
-			raise ValueError("Horn.profile must be 'conical', 'exponential', or 'parabolic'.")
+			raise NotImplementedError("Horn: only conical profile is supported in this revision.")
 
-		# basic validation
-		if self.L <= 0.0 or self.S_throat <= 0.0 or self.S_mouth <= 0.0:
+		if not (self.L > 0.0 and self.S_throat > 0.0 and self.S_mouth > 0.0):
 			raise ValueError("Horn: L, S_throat, S_mouth must be > 0.")
-		if self.R_throat < 0.0 or self.R_mouth < 0.0:
-			raise ValueError("Horn: R_throat and R_mouth must be ≥ 0 (Pa·s/m³).")
+		if not (self.R_throat >= 0.0 and self.R_mouth >= 0.0):
+			raise ValueError("Horn: R_throat and R_mouth must be ≥ 0.")
 
-		# exponential flare constant (derived)
-		if self.profile == "exp":
-			self._m = np.log(self.S_mouth / self.S_throat) / self.L
-		else:
-			self._m = None
-
-		# radiator label rules for radiation_space
 		if self.mouth_load == "radiation_space" and not self.mouth_label:
 			raise ValueError("Horn: mouth_label is required when mouth_load='radiation_space'.")
 		if self.throat_load == "radiation_space" and not self.throat_label:
 			raise ValueError("Horn: throat_label is required when throat_load='radiation_space'.")
 
-	def _area(self, x: np.ndarray) -> np.ndarray:
-		# x is 1D positions along axis [0, L]
-		if self.profile == "con":
-			s0 = np.sqrt(self.S_throat)
-			sL = np.sqrt(self.S_mouth)
-			s = s0 + (sL - s0) * (x / self.L)
-			return s * s
-		elif self.profile == "exp":
-			return self.S_throat * np.exp((self._m or 0.0) * x)
-		elif self.profile == "para":
-			return self.S_throat + (self.S_mouth - self.S_throat) * (x / self.L)
-		else:
-			raise ValueError(f"Horn: unknown horn profile '{self.profile}'.")
+	# ------------------------------ Utilities ------------------------------ #
+	@staticmethod
+	def _apex_distances(L: float, S1: float, S2: float) -> Optional[tuple[float, float, float]]:
+		s1 = np.sqrt(S1)
+		s2 = np.sqrt(S2)
+		den = s2 - s1
+		if np.all(np.abs(den) <= 1e-12 * max(1.0, float(s1))):
+			return None
+		absden = np.abs(den)
+		r1 = L * s1 / absden
+		r2 = L * s2 / absden
+		G = S1 / (r1 ** 2)
+		return float(r1), float(r2), float(G)
 
-	def _abcd_chain(self, omega: np.ndarray, N: int = 64):
-	
-	
-		print('***** acoustic.py / _abcd_chain: this might give accurate results for flared horns. Consider replacing this code for arbitrary horn profiles by exact solutions for the conventional flare functions!')
-	
-		F = omega.size
-		N = max(1, int(N))
-		
+	def _radiation_impedance(self, omega: np.ndarray, S_ap: float, loading: str) -> np.ndarray:
+		from .acoustic import RadiationPiston  # type: ignore
+		return RadiationPiston(Sd=S_ap, loading=loading).impedance(omega)
 
-		
-		dx = self.L / N
-		# Node positions (0..L) and corresponding areas
-		x_nodes = np.linspace(0.0, self.L, N + 1)
-		S_nodes = self._area(x_nodes)  # (N+1,)
-		k = omega / C0  # (F,)
-		# Initialize total ABCD as identity per frequency
-		A = np.ones((F,), dtype=np.complex128)
-		B = np.zeros((F,), dtype=np.complex128)
-		C = np.zeros((F,), dtype=np.complex128)
-		D = np.ones((F,), dtype=np.complex128)
-		# stuffing resistance interpolated linearly along x at slice centers
-		xc = (x_nodes[:-1] + x_nodes[1:]) * 0.5
-		Rx = self.R_throat + (self.R_mouth - self.R_throat) * (xc / max(self.L, 1e-30))  # (N,)
-				
-		for i in range(N):
-			Si = max(S_nodes[i], 1e-30)
-			Sj = max(S_nodes[i+1], 1e-30)
-			Smid = (Si * Sj) ** 0.5
-			Zc = (RHO0 * C0) / Smid  # scalar
-			# Uniform cylinder of length dx and area Smid
-			cos = np.cos(k * dx)
-			jsin = 1j * np.sin(k * dx)
-			Ai = cos
-			Bi = jsin * Zc
-			Ci = jsin / Zc
-			Di = cos
-			# Right-multiply current total by cylinder segment
-			A, B, C, D = A*Ai + B*Ci, A*Bi + B*Di, C*Ai + D*Ci, C*Bi + D*Di
-			# Ideal acoustic transformer for area change Si -> Sj (n = sqrt(Sj/Si))
-			n = (Sj / Si) ** 0.5
-			
-			
-			
-			# Right-multiply by [[n,0],[0,1/n]]
-			A, B, C, D = A*n, B*(1.0/n), C*n, D*(1.0/n)
-			# Series stuffing resistance for this slice: Ri = R(x)*dx / Smid
-			Ri = (Rx[i] * dx) / Smid
-			B = B + A * Ri
-			D = D + C * Ri
-		return A, B, C, D
-		
-		
-
-
-
-	def _radiation_impedance(self, omega: np.ndarray, S_ap: float) -> np.ndarray:
-		# Wideband baffled piston radiation impedance at the aperture area.
-		Rp = RadiationPiston(Sd=S_ap, loading='4pi')  # assume horn mouth is "free", no baffle, so 4pi
-		return Rp.impedance(omega)
-
-
-	def _load_impedance_at_mouth(self, omega: np.ndarray) -> np.ndarray:
+	def _load_impedance_at_mouth(self, omega: np.ndarray) -> Optional[np.ndarray]:
+		Rm = float(self.R_mouth)
 		if self.mouth_load == "rigid":
-			return np.full_like(omega, np.inf + 0j)
-		if self.mouth_load == "radiation_space":
-			return self._radiation_impedance(omega, self.S_mouth)
-		if isinstance(self.mouth_load, str) and self.mouth_load not in ("", None):
-			# connected to another labeled element handled by the network; treat as open here
-			return np.full_like(omega, np.inf + 0j)
-		# default: matched to its own Zc at mouth area
-		return (RHO0 * C0) / self.S_mouth + 0j
+			ZL = np.full_like(omega, np.inf + 0j)
+		elif self.mouth_load == "radiation_space":
+			ZL = self._radiation_impedance(omega, self.S_mouth, self.mouth_loading)
+		elif isinstance(self.mouth_load, (float, complex)):
+			ZL = np.full_like(omega, complex(self.mouth_load))
+		elif isinstance(self.mouth_load, str) and self.mouth_load:
+			return None
+		else:
+			return None
+		return ZL + Rm
 
-	def _load_impedance_at_throat(self, omega: np.ndarray) -> np.ndarray | None:
-		if self.throat_load == "rigid":
-			return np.full_like(omega, np.inf + 0j)
-		if self.throat_load == "radiation_space":
-			return self._radiation_impedance(omega, self.S_throat)
-		return None  # typically driven here
+	# --------------------------- Core cone solution ------------------------- #
+	def _BA_ratio(self, k: np.ndarray, r2: float, G: float, ZL: np.ndarray) -> np.ndarray:
+		Z0 = RHO0 * C0
+		# Correct boundary solve at the mouth
+		num = -1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 + 1.0)
+		den =  1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 - 1.0)
+		den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
+		return np.exp(-2j * k * r2) * (num / den)
 
-	def impedance(self, omega: np.ndarray) -> np.ndarray:
-		A, B, C, D = self._abcd_chain(omega)
-		ZL = self._load_impedance_at_mouth(omega)
-		Zin = (A * ZL + B) / (C * ZL + D)
-		Zth = self._load_impedance_at_throat(omega)
-		if Zth is not None:
-			# parallel with explicit throat radiation/load
-			Zin = (Zin * Zth) / (Zin + Zth)
+	def _U(self, r: float, k: np.ndarray, G: float, BA: np.ndarray) -> np.ndarray:
+		E = np.exp(-1j * k * r)
+		return G * E * (-(1.0 + 1j * k * r) + BA * np.exp(2j * k * r) * (1j * k * r - 1.0))
+
+	def _P(self, r: float, k: np.ndarray, Z0: float, BA: np.ndarray) -> np.ndarray:
+		E = np.exp(-1j * k * r)
+		return -1j * k * Z0 * (E + BA * np.exp(1j * k * r)) / r
+
+	def _conical_input_impedance(self, omega: np.ndarray, ZL: np.ndarray) -> np.ndarray:
+		Z0 = RHO0 * C0
+		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
+		k = omega / C0
+		if apex is None:
+			Zc = Z0 / self.S_throat
+			t = np.tan(k * self.L)
+			den = Zc + 1j * ZL * t
+			den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
+			return Zc * (ZL + 1j * Zc * t) / den
+		r1, r2, G = apex
+		BA = self._BA_ratio(k, r2, G, ZL)
+		p1 = self._P(r1, k, Z0, BA)
+		U1 = self._U(r1, k, G, BA)
+		return p1 / U1
+
+	# ------------------------------ API methods ---------------------------- #
+	def impedance(self, omega: np.ndarray, ZL_external: Optional[np.ndarray] = None) -> np.ndarray:
+		ZL_local = self._load_impedance_at_mouth(omega)
+		ZL = ZL_external if ZL_external is not None else ZL_local
+		if ZL is None:
+			raise ValueError("Horn.impedance: mouth load is unspecified.")
+		Zin = self._conical_input_impedance(omega, ZL)
+		if self.R_throat:
+			Zin = Zin + float(self.R_throat)
 		return Zin
 
-	def radiation_channels(self, omega: np.ndarray, U_in: np.ndarray | None = None):
-		# transfer from throat volume velocity to mouth volume velocity
-		A, B, C, D = self._abcd_chain(omega)
-		ZL = self._load_impedance_at_mouth(omega)
-		den = (C * ZL + D)
-		den = np.where(np.abs(den) < 1e-18, 1e-18 + 0j, den)
-		H_umouth = 1.0 / den  # U_mouth / U_in
+	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
+		"""
+		Return radiation channels at the horn mouth.
+		"""
+		if not (self.mouth_label and isinstance(self.mouth_label, str)):
+			return []
+		if U_in is None:
+			return []
 
-		chs = []
-		if self.mouth_load == "radiation_space" and self.mouth_label:
-			Ui = H_umouth if U_in is None else (H_umouth * U_in)
-			chs.append({"label": self.mouth_label, "U": Ui, "S": self.S_mouth})
-		if self.throat_load == "radiation_space" and self.throat_label:
-			Ui = np.ones_like(omega, dtype=complex) if U_in is None else U_in
-			chs.append({"label": self.throat_label, "U": Ui, "S": self.S_throat})
-		return chs
+		Z0 = RHO0 * C0
+		k = omega / C0
+		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
+		ZL = self._load_impedance_at_mouth(omega)
+
+		# Cylindrical case
+		if apex is None:
+			if ZL is None:
+				return [{"label": self.mouth_label, "U": U_in, "S": self.S_mouth}]
+			Zc = Z0 / self.S_throat
+			c = np.cos(k * self.L)
+			s = np.sin(k * self.L)
+			den = c + 1j * (ZL / Zc) * s
+			den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
+			H = 1.0 / den
+			Ui = H * U_in
+			return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
+
+		# Conical with load
+		if ZL is not None:
+			r1, r2, G = apex
+			BA = self._BA_ratio(k, r2, G, ZL)
+			U1 = self._U(r1, k, G, BA)
+			U2 = self._U(r2, k, G, BA)
+			H_umouth = U2 / U1
+			Ui = H_umouth * U_in
+			return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
+
+		# Conical but no ZL known
+		r1, r2, _ = apex
+		H_geom = (r2 / r1) ** 2 * np.exp(-1j * k * (r2 - r1))
+		Ui = H_geom * U_in
+		return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
+
+

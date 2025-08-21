@@ -11,7 +11,7 @@ elements:
   S_mouth:  400E-4      # m²
   R_throat: 0
   R_mouth: 0
-  profile: exponential
+  profile: conical
   mouth_load: radiation_space
   mouth_label: LINE_MOUTH
 

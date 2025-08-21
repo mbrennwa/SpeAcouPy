@@ -9,7 +9,7 @@ subprocess.run([
     "speacoupy",
     "config_transmissionline.yaml",
     "--csv",
-    "--prefix", "SpeAcouPy_output"
+    "--prefix", "SpeAcouPy_output",
 ])
 
 
