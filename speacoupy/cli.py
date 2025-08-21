@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 from typing import Any, Dict
 import yaml
+from .yaml_utils import sanitize_yaml_text, find_yaml_offenses
 from importlib.resources import files
 
 from .acoustic import RadiationPiston, Port, SealedBox, VentedBox, Horn
@@ -156,9 +157,17 @@ def fit_semi_inductance(points, Re, Bl, Rms, Mms, Cms):
 # ---------------- YAML ----------------
 def load_config(path: str) -> dict:
 	with open(path, "r", encoding="utf-8") as f:
-		return yaml.safe_load(f)
-
-# ---------------- Element builders ----------------
+		raw = f.read()
+	# Detect & auto-sanitize suspicious whitespace before YAML parse
+	offenses = find_yaml_offenses(raw)
+	if offenses:
+		print("[WARN] Non-standard whitespace found in YAML; normalizing before parse.")
+		for off in offenses[:5]:
+			print(f"  {path}:{off.line}:{off.col} – {off.description}")
+		if len(offenses) > 5:
+			print(f"  ...and {len(offenses)-5} more.")
+	cleaned = sanitize_yaml_text(raw, strict=False)
+	return yaml.safe_load(cleaned)
 def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 	t = (spec.get("type") or "").lower()
 	if t == "sealed_box":
@@ -537,4 +546,3 @@ def main(argv=None):
 
 if __name__ == "__main__":
 	raise SystemExit(main())
-
