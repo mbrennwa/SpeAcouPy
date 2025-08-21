@@ -60,9 +60,10 @@ def _visible_snippet(line: str, col1: int, width: int = 80) -> str:
 def find_yaml_offenses(text: str) -> List[Offense]:
 	offenses: List[Offense] = []
 	for i, raw_line in enumerate(text.splitlines(), start=1):
-		# Identify any disallowed chars
-		for j, ch in enumerate(raw_line, start=1):
-			if ch in ALL_BAD or (ch == TAB and (len(raw_line) - len(raw_line.lstrip(TAB)) > 0)):
+		# Split into code and comment part
+		code_part = raw_line.split("#", 1)[0]
+		for j, ch in enumerate(code_part, start=1):
+			if ch in ALL_BAD or (ch == TAB and (len(code_part) - len(code_part.lstrip(TAB)) > 0)):
 				desc = ALL_BAD.get(ch, "TAB in indentation (YAML forbids tabs)")
 				offenses.append(
 					Offense(
