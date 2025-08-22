@@ -168,21 +168,13 @@ class RadiationSpace:
 	def __repr__(self):
 		return f"RadiationSpace({self.space})"
 
-
-
 @dataclass
 class Horn(Acoustic):
 	"""
-	Simplified horn element — **conical only** (exact algebraic solution).
+	Conical horn element with exact spherical-wave interior and a
+	profile-aware **self-consistent** mouth radiation model.
 
-	This step intentionally supports only conical flares. Other profiles will be
-	added later.
-
-	Notes
-	-----
-	• **No implicit default mouth termination.** Either set an explicit `mouth_load` that
-	  resolves locally (e.g. "rigid" or "radiation_space"), or pass `ZL_external` to
-	  `impedance(omega, ZL_external=...)`. If neither is provided, `impedance()` raises.
+	Only the **conical** profile is supported in this revision.
 	"""
 	L: float
 	S_throat: float
@@ -194,7 +186,7 @@ class Horn(Acoustic):
 	throat_label: Optional[str] = None
 	mouth_load: Optional[str] = None
 	mouth_label: Optional[str] = None
-	mouth_loading: str = "4pi"
+	mouth_loading: str = "2pi"
 	throat_loading: str = "4pi"
 	label: str = ""
 
@@ -222,6 +214,7 @@ class Horn(Acoustic):
 		s1 = np.sqrt(S1)
 		s2 = np.sqrt(S2)
 		den = s2 - s1
+		# Cylindrical limit → handled by TL formula
 		if np.all(np.abs(den) <= 1e-12 * max(1.0, float(s1))):
 			return None
 		absden = np.abs(den)
@@ -230,16 +223,130 @@ class Horn(Acoustic):
 		G = S1 / (r1 ** 2)
 		return float(r1), float(r2), float(G)
 
-	def _radiation_impedance(self, omega: np.ndarray, S_ap: float, loading: str) -> np.ndarray:
+	# ---------------- Mouth radiation (axisymmetric ring integral) ----------- #
+	def _get_mouth_grid(self, Nr: int = 48, Nphi: int = 64):
+		"""Axisymmetric aperture quadrature using **rings** and an azimuth integral.
+		Returns a cache with radii ri (midpoints), ring widths dr, ring areas wr,
+		and azimuth nodes/weights for the φ-integral used in the kernel K(ri,rj; k).
+		"""
+		a = float(np.sqrt(self.S_mouth / np.pi))
+		grid = getattr(self, "_mouth_grid", None)
+		if grid and grid.get("a") == a and grid.get("Nr") == Nr and grid.get("Nphi") == Nphi:
+			return grid
+		# Radial rings (midpoint rule)
+		ri = (np.arange(Nr) + 0.5) * (a / Nr)
+		dr = a / Nr
+		wr = 2.0 * np.pi * ri * dr  # ring areas
+		# Azimuthal quadrature (uniform trapezoid is fine for periodic integrand)
+		phi = 2 * np.pi * (np.arange(Nphi) + 0.5) / Nphi
+		wphi = np.full(Nphi, 2*np.pi / Nphi)
+		grid = {"a": a, "Nr": Nr, "Nphi": Nphi, "ri": ri.astype(float), "dr": float(dr),
+				"wr": wr.astype(float), "phi": phi.astype(float), "wphi": wphi.astype(float),
+				"Area": float(self.S_mouth)}
+		self._mouth_grid = grid
+		return grid
+
+	def _kernel_ring_avg(self, k: float, ri: np.ndarray, rj: np.ndarray, phi: np.ndarray, wphi: np.ndarray) -> np.ndarray:
+		"""Compute the azimuth-averaged Rayleigh kernel K_ij(k) for rings i,j:
+		K_ij = (1/2π)∫_0^{2π} e^{-jk R(ri,rj,φ)} / R(ri,rj,φ) dφ.
+		Vectorized over i,j with broadcasting.
+		"""
+		# ri: (Nr,), rj: (Nr,), phi: (Nphi,)
+		Ri = ri[:, None, None]  # (Nr,1,1)
+		Rj = rj[None, :, None]  # (1,Nr,1)
+		Phi = phi[None, None, :]  # (1,1,Nphi)
+		# Law of cosines in the plane (receiver on ring ri, source on ring rj)
+		R = np.sqrt(Ri*Ri + Rj*Rj - 2.0*Ri*Rj*np.cos(Phi))  # (Nr,Nr,Nphi)
+		# Avoid singularity for coincident points: use local cell size as floor
+		# Equivalent length scale ~ sqrt(dr^2 + (ri*dphi)^2); approximate with dr
+		dr = self._mouth_grid["dr"] if hasattr(self, "_mouth_grid") else (ri.max()/ri.size)
+		R = np.where(R < 1e-12, dr, R)
+		Kphi = np.exp(-1j * k * R) / R
+		# Average over φ with weights, then divide by 2π
+		Kij = (Kphi * wphi[None, None, :]).sum(axis=2) / (2*np.pi)
+		return Kij  # (Nr,Nr)
+
+	def _pavg_from_u_ring(self, omega: float, u_ring: np.ndarray, grid: dict, loading: str) -> complex:
+		"""Compute **area-averaged** pressure over the aperture from ring-averaged
+		normal velocity `u_ring(ri)`, using the axisymmetric Rayleigh kernel.
+		"""
+		k = omega / C0
+		if k == 0:
+			return 0.0
+		fac = 1.0 / (2 * np.pi) if str(loading).lower().startswith("2") else 1.0 / (4 * np.pi)
+		ri, wr, phi, wphi, Area = grid["ri"], grid["wr"], grid["phi"], grid["wphi"], grid["Area"]
+		K = self._kernel_ring_avg(k, ri, ri, phi, wphi)  # (Nr,Nr)
+		# Pressure at each receiver ring center from all source rings
+		p_ring = 1j * omega * RHO0 * fac * (K @ (u_ring * wr))  # (Nr,)
+		# Area-averaged pressure over aperture
+		p_avg = (wr @ p_ring) / Area
+		return p_avg
+		ri = (np.arange(Nr) + 0.5) * (a / Nr)
+		dr = a / Nr
+		theta = 2 * np.pi * (np.arange(Nt) + 0.5) / Nt
+		Ri, Th = np.meshgrid(ri, theta, indexing="ij")
+		x = (Ri * np.cos(Th)).ravel()
+		y = (Ri * np.sin(Th)).ravel()
+		w = (dr * Ri) * (2 * np.pi / Nt)
+		w = w.ravel().astype(float)
+		# Pairwise distances in mouth plane
+		X = x[:, None] - x[None, :]
+		Y = y[:, None] - y[None, :]
+		R = np.sqrt(X * X + Y * Y)
+		# Regularize diagonal with a conservative cell-equivalent radius
+		eps = max(dr, a / (Nr * np.sqrt(np.pi)))
+		R[np.eye(R.shape[0], dtype=bool)] = eps
+		grid = {"a": a, "Nr": Nr, "Nt": Nt, "ri": ri, "dr": dr, "theta": theta,
+				"x": x, "y": y, "w": w, "R": R, "Area": float(self.S_mouth)}
+		self._mouth_grid = grid
+		return grid
+
+		J = np.exp(-1j * k * R) / R
+		return 1j * omega * RHO0 * fac * (J @ (u_nodes * w))
+
+	def _conical_mouth_Z_eff_iter(self, omega: np.ndarray, loading: str, n_iter: int = 2) -> np.ndarray:
+		"""Self-consistent effective radiation impedance for a **conical** mouth.
+		Axisymmetric ring integral (no θ-grid). Returns Z_eff(ω).
+		"""
+		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
+		assert apex is not None
+		r1, r2, G = apex
+		k = omega / C0
+		g = self._get_mouth_grid(Nr=48, Nphi=64)
+		ri, wr, Area = g["ri"], g["wr"], g["Area"]
+		# initialize with baffled piston for stability
 		from .acoustic import RadiationPiston  # type: ignore
-		return RadiationPiston(Sd=S_ap, loading=loading).impedance(omega)
+		ZL = RadiationPiston(Sd=self.S_mouth, loading=loading).impedance(omega)
+		for _ in range(max(1, int(n_iter))):
+			BA = self._BA_ratio(k, r2, G, ZL)
+			Z_eff = np.empty_like(omega, dtype=complex)
+			for i, wv in enumerate(omega):
+				ki = k[i]
+				# Conical spherical-mode velocity **on the aperture plane** (ring centers)
+				r_loc = np.sqrt(r2 * r2 + ri * ri)
+				phase_out = np.exp(-1j * ki * r_loc)
+				t1 = -(1.0 + 1j * ki * r_loc)
+				t2 = (1j * ki * r_loc - 1.0) * np.exp(2j * ki * r_loc)
+				u_shape = phase_out * (t1 + BA[i] * t2) * (r2 / (r_loc ** 3))
+				# Normalize area-average to 1 (use ring areas wr)
+				u_avg = (wr @ u_shape) / Area
+				if u_avg == 0:
+					u_avg = 1.0 + 0j
+				u_ring = u_shape / u_avg
+				# Area-averaged pressure from ring kernel
+				p_avg = self._pavg_from_u_ring(wv, u_ring, g, loading)
+				# Power-consistent one-port: Z = p_avg / u_avg ; u_avg ≡ 1 by normalization
+				Z_eff[i] = p_avg
+			ZL = Z_eff
+		self._mouth_BA_cache = {"omega": omega, "BA": BA, "ZL": ZL}
+		return ZL
 
 	def _load_impedance_at_mouth(self, omega: np.ndarray) -> Optional[np.ndarray]:
 		Rm = float(self.R_mouth)
 		if self.mouth_load == "rigid":
 			ZL = np.full_like(omega, np.inf + 0j)
 		elif self.mouth_load == "radiation_space":
-			ZL = self._radiation_impedance(omega, self.S_mouth, self.mouth_loading)
+			ZL = self._conical_mouth_Z_eff_iter(omega, self.mouth_loading, n_iter=2)
 		elif isinstance(self.mouth_load, (float, complex)):
 			ZL = np.full_like(omega, complex(self.mouth_load))
 		elif isinstance(self.mouth_load, str) and self.mouth_load:
@@ -251,8 +358,8 @@ class Horn(Acoustic):
 	# --------------------------- Core cone solution ------------------------- #
 	def _BA_ratio(self, k: np.ndarray, r2: float, G: float, ZL: np.ndarray) -> np.ndarray:
 		Z0 = RHO0 * C0
-		num = -1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 + 1.0)
-		den =  1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 - 1.0)
+		num = (G * ZL * k * (r2 ** 2)) - 1j * (G * ZL * r2) - (Z0 * k)
+		den = (G * ZL * k * (r2 ** 2)) + 1j * (G * ZL * r2) + (Z0 * k)
 		den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
 		return np.exp(-2j * k * r2) * (num / den)
 
@@ -267,14 +374,15 @@ class Horn(Acoustic):
 	def _conical_input_impedance(self, omega: np.ndarray, ZL: np.ndarray) -> np.ndarray:
 		Z0 = RHO0 * C0
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
-		k = omega / C0
 		if apex is None:
+			k0 = omega / C0
 			Zc = Z0 / self.S_throat
-			t = np.tan(k * self.L)
+			t = np.tan(k0 * self.L)
 			den = Zc + 1j * ZL * t
 			den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
 			return Zc * (ZL + 1j * Zc * t) / den
 		r1, r2, G = apex
+		k = omega / C0
 		BA = self._BA_ratio(k, r2, G, ZL)
 		p1 = self._P(r1, k, Z0, BA)
 		U1 = self._U(r1, k, G, BA)
@@ -292,46 +400,43 @@ class Horn(Acoustic):
 		return Zin
 
 	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
-		"""
-		Return radiation channels at the horn mouth.
-		"""
 		if not (self.mouth_label and isinstance(self.mouth_label, str)):
 			return []
 		if U_in is None:
 			return []
-
 		Z0 = RHO0 * C0
-		k = omega / C0
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
 		ZL = self._load_impedance_at_mouth(omega)
-
-		# Cylindrical case
 		if apex is None:
+			k0 = omega / C0
 			if ZL is None:
 				return [{"label": self.mouth_label, "U": U_in, "S": self.S_mouth}]
 			Zc = Z0 / self.S_throat
-			c = np.cos(k * self.L)
-			s = np.sin(k * self.L)
+			c = np.cos(k0 * self.L)
+			s = np.sin(k0 * self.L)
 			den = c + 1j * (ZL / Zc) * s
 			den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
 			H = 1.0 / den
 			Ui = H * U_in
 			return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
-
-		# Conical with load
-		if ZL is not None:
-			r1, r2, G = apex
+		r1, r2, G = apex
+		k = omega / C0
+		# Reuse BA from cache if available (same omega)
+		cache = getattr(self, "_mouth_BA_cache", None)
+		use_cache = cache is not None and np.array_equal(cache.get("omega"), omega)
+		if use_cache:
+			BA = cache["BA"]
+		else:
+			if ZL is None:
+				ZL = np.full_like(omega, np.inf + 0j)
 			BA = self._BA_ratio(k, r2, G, ZL)
-			U1 = self._U(r1, k, G, BA)
-			U2 = self._U(r2, k, G, BA)
-			H_umouth = U2 / U1
-			Ui = H_umouth * U_in
-			return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
-
-		# Conical but no ZL known
-		r1, r2, _ = apex
-		H_geom = (r2 / r1) ** 2 * np.exp(-1j * k * (r2 - r1))
-		Ui = H_geom * U_in
+		U1 = self._U(r1, k, G, BA)
+		U2 = self._U(r2, k, G, BA)
+		den = U1
+		eps = (1e-12 + 1e-9 * np.max(np.abs(den)))
+		den = np.where(np.abs(den) < eps, den + 1j * eps, den)
+		H_umouth = U2 / den
+		Ui = H_umouth * U_in
 		return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
 
 

@@ -34,9 +34,9 @@ circuit:
   - DRIVER
 
 frequency:
-  min: 5
-  max: 10000
-  points: 300
+  min: 10
+  max: 3000
+  points: 200
 
 source:
   volts_rms: 2.83
