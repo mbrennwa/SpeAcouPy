@@ -14,6 +14,7 @@ elements:
   profile: conical
   mouth_load: radiation_space
   mouth_label: LINE_MOUTH
+  mouth_termination: baffle   # use 'free' if you want 4π (unbaffled) radiation
 
 - type: driver
   label: DRIVER

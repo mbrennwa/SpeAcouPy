@@ -218,7 +218,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		return RadiationPiston(Sd=Sd_final, loading=loading)
 	
 	if t == "horn":
-		for kreq in ("L", "S_throat", "S_mouth", "profile", "R_throat", "R_mouth"):
+		for kreq in ("L", "S_throat", "S_mouth", "profile", "R_throat", "R_mouth", "mouth_termination"):
 			if kreq not in spec:
 				raise KeyError(f"horn: missing required key '{kreq}'")
 		profile = str(spec["profile"]).lower()
@@ -226,6 +226,8 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		mouth_label = spec.get("mouth_label", None)
 		throat_load = spec.get("throat_load", None)
 		throat_label = spec.get("throat_label", None)
+
+		mouth_termination = str(spec["mouth_termination"]).lower()
 
 		# REQUIRED stuffing losses (Rb-style units, Pa·s/m^3)
 		try:
@@ -239,7 +241,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		allowed = {
 			"type","label","L","S_throat","S_mouth","profile",
 			"mouth_load","mouth_label","throat_load","throat_label",
-			"R_throat","R_mouth"
+			"R_throat","R_mouth","mouth_termination"
 		}
 		unknown = set(spec.keys()) - allowed
 		if unknown:
@@ -256,6 +258,7 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 			mouth_label=mouth_label,
 			throat_load=throat_load,
 			throat_label=throat_label,
+			mouth_termination=mouth_termination,
 		)
 
 	raise ValueError(f"Unknown acoustic element type: {t}")

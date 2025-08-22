@@ -180,14 +180,13 @@ class Horn(Acoustic):
 	S_throat: float
 	S_mouth: float
 	profile: str
+	mouth_termination: str
 	R_throat: float = 0.0
 	R_mouth: float = 0.0
 	throat_load: Optional[str] = None
 	throat_label: Optional[str] = None
 	mouth_load: Optional[str] = None
 	mouth_label: Optional[str] = None
-	mouth_loading: str = "2pi"
-	throat_loading: str = "4pi"
 	label: str = ""
 
 	# -------------------------- Validation / setup -------------------------- #
@@ -207,6 +206,15 @@ class Horn(Acoustic):
 			raise ValueError("Horn: mouth_label is required when mouth_load='radiation_space'.")
 		if self.throat_load == "radiation_space" and not self.throat_label:
 			raise ValueError("Horn: throat_label is required when throat_load='radiation_space'.")
+
+	def _mouth_termination(self) -> str:
+		"""Map 'free'|'baffle' → loading string expected by radiation models."""
+		term = (self.mouth_termination or '').strip().lower()
+		if term == 'free':
+			return '4pi'
+		elif term == 'baffle':
+			return '2pi'
+		raise ValueError(f"Horn: invalid mouth_termination {term!r}, must be 'free' or 'baffle'")
 
 	# ------------------------------ Utilities ------------------------------ #
 	@staticmethod
@@ -346,7 +354,12 @@ class Horn(Acoustic):
 		if self.mouth_load == "rigid":
 			ZL = np.full_like(omega, np.inf + 0j)
 		elif self.mouth_load == "radiation_space":
-			ZL = self._conical_mouth_Z_eff_iter(omega, self.mouth_loading, n_iter=2)
+			if abs(float(self.S_mouth) - float(self.S_throat)) <= 1e-12 * max(1.0, float(self.S_mouth)):
+				# Cylindrical limit: use baffled/free piston model directly
+				piston = RadiationPiston(Sd=float(self.S_mouth), loading=self._mouth_termination())
+				ZL = piston.impedance(omega)
+			else:
+				ZL = self._conical_mouth_Z_eff_iter(omega, self._mouth_termination(), n_iter=2)
 		elif isinstance(self.mouth_load, (float, complex)):
 			ZL = np.full_like(omega, complex(self.mouth_load))
 		elif isinstance(self.mouth_load, str) and self.mouth_load:
