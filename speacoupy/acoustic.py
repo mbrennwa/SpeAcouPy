@@ -168,6 +168,8 @@ class RadiationSpace:
 	def __repr__(self):
 		return f"RadiationSpace({self.space})"
 
+
+
 @dataclass
 class Horn(Acoustic):
 	"""
@@ -249,7 +251,6 @@ class Horn(Acoustic):
 	# --------------------------- Core cone solution ------------------------- #
 	def _BA_ratio(self, k: np.ndarray, r2: float, G: float, ZL: np.ndarray) -> np.ndarray:
 		Z0 = RHO0 * C0
-		# Correct boundary solve at the mouth
 		num = -1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 + 1.0)
 		den =  1j * k * Z0 + G * ZL * (r2 ** 2) * (1j * k * r2 - 1.0)
 		den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
