@@ -218,16 +218,22 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		return RadiationPiston(Sd=Sd_final, loading=loading)
 	
 	if t == "horn":
-		for kreq in ("L", "S_throat", "S_mouth", "profile", "R_throat", "R_mouth", "mouth_termination"):
+		for kreq in ("L", "S_throat", "S_mouth", "profile", "R_throat", "R_mouth"):
 			if kreq not in spec:
 				raise KeyError(f"horn: missing required key '{kreq}'")
+		# Only require mouth_termination when this horn radiates to space
+		_mouth_load_raw = (spec.get("mouth_load") or "radiation_space")
+		if isinstance(_mouth_load_raw, str) and _mouth_load_raw.strip().lower() == "radiation_space":
+			if "mouth_termination" not in spec:
+				raise KeyError("horn: missing required key 'mouth_termination' when mouth_load is 'radiation_space'")
+
 		profile = str(spec["profile"]).lower()
-		mouth_load = spec.get("mouth_load", None)
+		mouth_load = spec.get("mouth_load", "radiation_space")
 		mouth_label = spec.get("mouth_label", None)
 		throat_load = spec.get("throat_load", None)
 		throat_label = spec.get("throat_label", None)
 
-		mouth_termination = str(spec["mouth_termination"]).lower()
+		mouth_termination = str(spec.get("mouth_termination", "")).lower()
 
 		# REQUIRED stuffing losses (Rb-style units, Pa·s/m^3)
 		try:
@@ -480,6 +486,21 @@ def build_system(cfg: dict):
 				if pl not in reg:
 					raise ValueError(f"VentedBox '{lbl}' port_load references unknown label '{pl}'")
 				setattr(obj, 'mouth_radiator', reg[pl])
+
+	# Horn chaining: resolve mouth_load and throat_load labels to objects
+	for lbl, obj in list(reg.items()):
+		if obj.__class__.__name__ == 'Horn':
+			ml = getattr(obj, 'mouth_load', None)
+			if isinstance(ml, str) and ml != 'radiation_space':
+				if ml not in reg:
+					raise ValueError(f"Horn '{lbl}' mouth_load references unknown label '{ml}'")
+				obj.mouth_load = reg[ml]
+			tl = getattr(obj, 'throat_load', None)
+			if isinstance(tl, str) and tl != 'radiation_space':
+				if tl not in reg:
+					raise ValueError(f"Horn '{lbl}' throat_load references unknown label '{tl}'")
+				obj.throat_load = reg[tl]
+
 
 	net_spec = cfg.get("circuit")
 	if not net_spec:

@@ -362,11 +362,16 @@ class Horn(Acoustic):
 				ZL = self._conical_mouth_Z_eff_iter(omega, self._mouth_termination(), n_iter=2)
 		elif isinstance(self.mouth_load, (float, complex)):
 			ZL = np.full_like(omega, complex(self.mouth_load))
+		elif hasattr(self.mouth_load, "impedance"):
+			# Chained element (e.g., another Horn): use its input impedance as the load at our mouth
+			ZL = self.mouth_load.impedance(omega)
 		elif isinstance(self.mouth_load, str) and self.mouth_load:
 			return None
 		else:
 			return None
 		return ZL + Rm
+
+
 
 	# --------------------------- Core cone solution ------------------------- #
 	def _BA_ratio(self, k: np.ndarray, r2: float, G: float, ZL: np.ndarray) -> np.ndarray:
@@ -413,43 +418,42 @@ class Horn(Acoustic):
 		return Zin
 
 	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
-		if not (self.mouth_label and isinstance(self.mouth_label, str)):
-			return []
+		# If there is no label and no downstream radiator, nothing to report
 		if U_in is None:
 			return []
+		# Compute velocity at the mouth of THIS horn
 		Z0 = RHO0 * C0
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
-		ZL = self._load_impedance_at_mouth(omega)
 		if apex is None:
 			k0 = omega / C0
-			if ZL is None:
-				return [{"label": self.mouth_label, "U": U_in, "S": self.S_mouth}]
 			Zc = Z0 / self.S_throat
-			c = np.cos(k0 * self.L)
-			s = np.sin(k0 * self.L)
-			den = c + 1j * (ZL / Zc) * s
-			den = np.where(np.abs(den) < 1e-24, 1e-24 + 0j, den)
-			H = 1.0 / den
-			Ui = H * U_in
-			return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
-		r1, r2, G = apex
-		k = omega / C0
-		# Reuse BA from cache if available (same omega)
-		cache = getattr(self, "_mouth_BA_cache", None)
-		use_cache = cache is not None and np.array_equal(cache.get("omega"), omega)
-		if use_cache:
-			BA = cache["BA"]
+			t = np.tan(k0 * self.L)
+			den = (Zc + 1j * (self._load_impedance_at_mouth(omega) or (np.inf+0j)) * t)
+			eps = (1e-12 + 1e-9 * np.max(np.abs(den)))
+			den = np.where(np.abs(den) < eps, den + 1j * eps, den)
+			H_umouth = (Zc * (1.0 - 1j * t * Zc / (self._load_impedance_at_mouth(omega) or (np.inf+0j)))) / den
+			U_mouth = H_umouth * U_in
 		else:
+			r1, r2, G = apex
+			k = omega / C0
+			ZL = self._load_impedance_at_mouth(omega)
 			if ZL is None:
+				# treat as rigid for transfer estimate; no radiation output anyway
 				ZL = np.full_like(omega, np.inf + 0j)
 			BA = self._BA_ratio(k, r2, G, ZL)
-		U1 = self._U(r1, k, G, BA)
-		U2 = self._U(r2, k, G, BA)
-		den = U1
-		eps = (1e-12 + 1e-9 * np.max(np.abs(den)))
-		den = np.where(np.abs(den) < eps, den + 1j * eps, den)
-		H_umouth = U2 / den
-		Ui = H_umouth * U_in
-		return [{"label": self.mouth_label, "U": Ui, "S": self.S_mouth}]
+			U1 = self._U(r1, k, G, BA)
+			U2 = self._U(r2, k, G, BA)
+			den = U1
+			eps = (1e-12 + 1e-9 * np.max(np.abs(den)))
+			den = np.where(np.abs(den) < eps, den + 1j * eps, den)
+			H_umouth = U2 / den
+			U_mouth = H_umouth * U_in
 
+		# If the mouth loads another element (e.g., another Horn), DELEGATE radiation downstream
+		if hasattr(self.mouth_load, "radiation_channels"):
+			return self.mouth_load.radiation_channels(omega, U_in=U_mouth)
 
+		# Otherwise, radiate here if we have a mouth label (i.e., this is the terminal horn)
+		if not (self.mouth_label and isinstance(self.mouth_label, str)):
+			return []
+		return [{"label": self.mouth_label, "U": U_mouth, "S": self.S_mouth}]
