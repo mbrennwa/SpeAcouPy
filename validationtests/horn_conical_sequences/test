@@ -1,0 +1,53 @@
+#!/usr/bin/env python3
+
+import subprocess
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# single horn
+subprocess.run([
+    "speacoupy",
+    "config_horn_single.yaml",
+    "--csv",
+    "--prefix", "single"
+])
+
+# same horn in multiple sequences
+subprocess.run([
+    "speacoupy",
+    "config_horn_multi.yaml",
+    "--csv",
+    "--prefix", "multi"
+])
+
+
+# load simulated data:
+single = pd.read_csv("single_DATA.csv", sep=",", comment="#")
+multi  = pd.read_csv("multi_DATA.csv", sep=",", comment="#")
+
+# plot impedance curves and save to PDF:
+plt.figure()
+plt.plot(single["Frequency (Hz)"], single["Impedance Magnitude (Ω)"], label="Single section")
+plt.plot(multi["Frequency (Hz)"], multi["Impedance Magnitude (Ω)"], label="4 sections", linestyle="--")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("Impedance (Ohm)")
+plt.title("Conical horn electrical impedance: single vs. sections")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("IMPEDANCE_COMPARISON.pdf", format="pdf")
+plt.close()
+
+
+# plot SPL curves and save to PDF:
+plt.figure()
+plt.plot(single["Frequency (Hz)"], single["SPL (dB-SPL @ 1m / 2pi)"], label="Single section")
+plt.plot(multi["Frequency (Hz)"], multi["SPL (dB-SPL @ 1m / 2pi)"], label="4 sections", linestyle="--")
+plt.xlabel("Frequency (Hz)")
+plt.ylabel("SPL (dB-SPL)")
+plt.title("Conical horn SPL (1m/2pi): single vs. sections")
+plt.grid(True)
+plt.legend()
+plt.xscale("log")
+plt.savefig("SPL_COMPARISON.pdf", format="pdf")
+plt.close()
