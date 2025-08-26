@@ -600,17 +600,17 @@ def main(argv=None):
 	
 		
 		
-	with busy("Reading config…"):
+	with busy("Reading config..."):
 		cfg = load_config(args.config)
 	### NADA Sd (it is in drv.motional.Sd already):
-	with busy("Building system…"):
+	with busy("Building system..."):
 	
 		
 
 		f, w, net, drv, Vsrc, r, loading_label, angles = build_system(cfg)
 	### NADA Sd IN INPUTS (it is in drv.motional.Sd already): solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
 	solver = ResponseSolver(series_net=net, driver=drv)
-	with busy("Solving model…"):
+	with busy("Solving model..."):
 		res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles, include_radiators=args.radiators)
 
 	os.makedirs(args.outdir, exist_ok=True)
@@ -618,7 +618,7 @@ def main(argv=None):
 
 	outputs = []
 	# PLOTS
-	with busy("Rendering plots…"):
+	with busy("Rendering plots..."):
 		for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
 			if enabled:
 				pretty_loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
@@ -634,7 +634,7 @@ def main(argv=None):
 				outputs.append(fmt.upper())
 	# CSV output
 	if args.csv:
-		with busy("Writing CSV…"):
+		with busy("Writing CSV..."):
 			write_fresponse_csv(res, args.outdir, pre, loading_label)
 		outputs.append("CSV")
 	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/')
