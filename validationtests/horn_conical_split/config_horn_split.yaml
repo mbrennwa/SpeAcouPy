@@ -1,5 +1,15 @@
-# simulation of a driver with its front radiating into free space and the back into a flared horn
-# the speacoupy output does not perfectly agree with the AJ Horn output because AJ Horn uses a plane-wave approximation for the flared horn
+# testing the splitting of acoustical flows
+# (A) single horn
+# (B) chain of two horn sequences with same overall geometry, but second sequencs split in two identical halves.
+# A and B should be identical at low frequencies, but may diverge slightly at higher frequencies due to two smaller pistons radiating in parallel
+
+# consdier conical horn, 4 m long:
+# S(x) = pi * (R0 * (x+x0)/x0)² with x0 = 1 and R0 = sqrt(S0/pi) = sqrt(200E-4/pi) = 7.9788E-2:
+# x = 0: S =  200E-4
+# x = 1: S =  800E-4
+# x = 2: S = 1800E-4
+# x = 3: S = 3200E-4
+# x = 4: S = 5000E-4
 
 radiation_space: 2pi
 
@@ -9,8 +19,8 @@ elements:
 - type: horn
   label: SINGLEHORN
   L: 4
-  S_throat: 200E-4      # m²
-  S_mouth:  16200E-4      # m²
+  S_throat:  200E-4      # m²
+  S_mouth:  5000E-4      # m²
   R_throat: 0
   R_mouth: 0
   profile: conical
@@ -18,13 +28,13 @@ elements:
   mouth_label: SINGLEHORN_MOUTH
   mouth_termination: baffle
   
-
-# First horn section on the driver, splitting in two
+# sequence of horns (1m + 2 x 3m split horn halves):
+#First horn section on the driver, splitting in two
 - type: horn
   label: SPLITTER
   L: 1
   S_throat: 200E-4      # m²
-  S_mouth:  1800E-4      # m²
+  S_mouth:  800E-4      # m²
   R_throat: 0
   R_mouth: 0
   profile: conical
@@ -33,8 +43,8 @@ elements:
 - type: horn
   label: SPLIT1
   L: 3
-  S_throat: 900E-4      # m²
-  S_mouth:  8100E-4     # m²
+  S_throat: 400E-4      # m²
+  S_mouth:  2500E-4     # m²
   R_throat: 0
   R_mouth: 0
   profile: conical
@@ -45,11 +55,12 @@ elements:
 - type: horn
   label: SPLIT2
   L: 3
-  S_throat: 900E-4      # m²
-  S_mouth:  8100E-4     # m²
+  S_throat: 400E-4      # m²
+  S_mouth:  2500E-4     # m²
   R_throat: 0
   R_mouth: 0
   profile: conical
+#  mouth_load: radiation_space
   mouth_load: radiation_space
   mouth_label: SPLIT2_MOUTH
   mouth_termination: baffle
@@ -77,7 +88,7 @@ circuit:
 frequency:
   min: 10
   max: 2000
-  points: 100
+  points: 300
 
 source:
   volts_rms: 2.83
