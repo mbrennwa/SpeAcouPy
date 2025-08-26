@@ -10,6 +10,7 @@ from typing import Any, Dict
 import yaml
 from .yaml_utils import sanitize_yaml_text, find_yaml_offenses
 from importlib.resources import files
+from .busy import busy
 
 from .acoustic import RadiationPiston, Port, SealedBox, VentedBox, Horn, SplitLoad
 from .constants import PROGRAMNAME, TWOPI, RHO0, C0, FARFIELD_DIST_M
@@ -596,35 +597,45 @@ def main(argv=None):
 	if not (args.png or args.pdf or args.csv):
 		parser.error("You must specify at least one output format: --png, --pdf, --csv")
 
-	cfg = load_config(args.config)
-	### NADA Sd (it is in drv.motional.Sd already): f, w, net, drv, Sd, Vsrc, r, loading_label, angles = build_system(cfg)	
-	f, w, net, drv, Vsrc, r, loading_label, angles = build_system(cfg)
+	
+		
+		
+	with busy("Reading config…"):
+		cfg = load_config(args.config)
+	### NADA Sd (it is in drv.motional.Sd already):
+	with busy("Building system…"):
+	
+		
 
+		f, w, net, drv, Vsrc, r, loading_label, angles = build_system(cfg)
 	### NADA Sd IN INPUTS (it is in drv.motional.Sd already): solver = ResponseSolver(series_net=net, driver=drv, Sd=Sd)
 	solver = ResponseSolver(series_net=net, driver=drv)
-	res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles, include_radiators=args.radiators)
+	with busy("Solving model…"):
+		res = solver.solve(w, V_source=Vsrc, r=r, loading=loading_label, angles_deg=angles, include_radiators=args.radiators)
 
 	os.makedirs(args.outdir, exist_ok=True)
 	pre = (args.prefix + "_") if args.prefix else ""
 
 	outputs = []
 	# PLOTS
-	for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
-		if enabled:
-			pretty_loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
-			plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
-					title=f"On-axis SPL (1 m / {pretty_loading_label})")
-			plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"))
-			if res.SPL_offaxis is not None and res.angles_deg is not None:
-				curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
-				labels = [f"{ang:.0f}°" for ang in res.angles_deg]
-				plot_spl_multi(res.f, curves, labels,
-							outfile=os.path.join(args.outdir, f"{pre}SPL_angles.{fmt}"),
-							title=f"SPL vs angle (1 m / {pretty_loading_label})")
-			outputs.append(fmt.upper())
+	with busy("Rendering plots…"):
+		for fmt, enabled in (("png", args.png), ("pdf", args.pdf)):
+			if enabled:
+				pretty_loading_label = loading_label.replace("1/2pi", "π/2").replace("1pi", "1π").replace("2pi", "2π").replace("4pi", "4π")
+				plot_spl(res.f, res.SPL_onaxis, outfile=os.path.join(args.outdir, f"{pre}SPL.{fmt}"),
+						title=f"On-axis SPL (1 m / {pretty_loading_label})")
+				plot_impedance(res.f, res.Zin, outfile=os.path.join(args.outdir, f"{pre}IMPEDANCE.{fmt}"))
+				if res.SPL_offaxis is not None and res.angles_deg is not None:
+					curves = [res.SPL_offaxis[i] for i in range(len(res.angles_deg))]
+					labels = [f"{ang:.0f}°" for ang in res.angles_deg]
+					plot_spl_multi(res.f, curves, labels,
+								outfile=os.path.join(args.outdir, f"{pre}SPL_angles.{fmt}"),
+								title=f"SPL vs angle (1 m / {pretty_loading_label})")
+				outputs.append(fmt.upper())
 	# CSV output
 	if args.csv:
-		write_fresponse_csv(res, args.outdir, pre, loading_label)
+		with busy("Writing CSV…"):
+			write_fresponse_csv(res, args.outdir, pre, loading_label)
 		outputs.append("CSV")
 	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/')
 	return 0
