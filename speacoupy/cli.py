@@ -11,7 +11,7 @@ import yaml
 from .yaml_utils import sanitize_yaml_text, find_yaml_offenses
 from importlib.resources import files
 
-from .acoustic import RadiationPiston, Port, SealedBox, VentedBox, Horn
+from .acoustic import RadiationPiston, Port, SealedBox, VentedBox, Horn, SplitLoad
 from .constants import PROGRAMNAME, TWOPI, RHO0, C0, FARFIELD_DIST_M
 from .domains import Net, Series, Parallel
 from .driver import Driver, DriverMechanicalBranch
@@ -253,7 +253,6 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		if unknown:
 			raise KeyError(f"horn: unknown keys: {sorted(unknown)}")
 		return Horn(
-			label=spec.get("label", ""),
 			L=float(spec["L"]),
 			S_throat=float(spec["S_throat"]),
 			S_mouth=float(spec["S_mouth"]),
@@ -502,6 +501,68 @@ def build_system(cfg: dict):
 				obj.throat_load = reg[tl]
 
 
+	
+	# SplitLoad handling: allow lists of labels for acoustic loads
+	for lbl, obj in list(reg.items()):
+		# Horn lists
+		if obj.__class__.__name__ == 'Horn':
+			ml = getattr(obj, 'mouth_load', None)
+			if isinstance(ml, list):
+				resolved = []
+				for s in ml:
+					if not isinstance(s, str) or s not in reg:
+						raise ValueError(f"Horn '{lbl}' mouth_load list references unknown label '{s}'")
+					resolved.append(reg[s])
+				obj.mouth_load = SplitLoad(resolved)
+			tl = getattr(obj, 'throat_load', None)
+			if isinstance(tl, list):
+				resolved = []
+				for s in tl:
+					if not isinstance(s, str) or s not in reg:
+						raise ValueError(f"Horn '{lbl}' throat_load list references unknown label '{s}'")
+					resolved.append(reg[s])
+				obj.throat_load = SplitLoad(resolved)
+		# VentedBox lists (port_load)
+		if obj.__class__.__name__ == 'VentedBox':
+			pl = getattr(obj, 'port_load', None)
+			if isinstance(pl, list):
+				resolved = []
+				for s in pl:
+					if not isinstance(s, str) or s not in reg:
+						raise ValueError(f"VentedBox '{lbl}' port_load list references unknown label '{s}'")
+					resolved.append(reg[s])
+				setattr(obj, 'mouth_radiator', SplitLoad(resolved))
+	# Driver lists (front/back)
+	if isinstance(drv.motional.front_load, list):
+		resolved = []
+		for s in drv.motional.front_load:
+			if not isinstance(s, str) or s not in reg:
+				raise ValueError(f"Driver front_load list references unknown label '{s}' (use an explicit RadiationPiston element if you need free-space in a list)")
+			resolved.append(reg[s])
+		drv.motional.front_load = SplitLoad(resolved)
+	if isinstance(drv.motional.back_load, list):
+		resolved = []
+		for s in drv.motional.back_load:
+			if not isinstance(s, str) or s not in reg:
+				raise ValueError(f"Driver back_load list references unknown label '{s}' (use an explicit RadiationPiston element if you need free-space in a list)")
+			resolved.append(reg[s])
+		drv.motional.back_load = SplitLoad(resolved)
+
+	# General SplitLoad handling for ANY element attribute ending with '_load'
+	for lbl, obj in list(reg.items()):
+		for attr in dir(obj):
+			if not attr.endswith('_load'):
+				continue
+			val = getattr(obj, attr, None)
+			if isinstance(val, list):
+				resolved = []
+				for s in val:
+					if not isinstance(s, str):
+						raise ValueError(f"{obj.__class__.__name__} '{lbl}' {attr} list entries must be labels (strings), got {type(s).__name__}")
+					if s not in reg:
+						raise ValueError(f"{obj.__class__.__name__} '{lbl}' {attr} references unknown label '{s}'")
+					resolved.append(reg[s])
+				setattr(obj, attr, SplitLoad(resolved))
 	net_spec = cfg.get("circuit")
 	if not net_spec:
 		raise ValueError("Config must define 'circuit' using labels.")

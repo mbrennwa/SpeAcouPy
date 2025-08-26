@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Iterable
+from typing import ClassVar, Optional, Iterable, Any
 import numpy as np
 from scipy.special import j1, struve  # wideband piston needs Bessel/Struve
 from .domains import Element, Domain
@@ -9,7 +9,62 @@ from .domains import Element, Domain
 # Physical constants (room temp)
 from .constants import RHO0, C0, P0
 
+
+class RadiationSpace:
+	"""Internal helper holding a boundary (4pi/2pi/1pi/1/2pi).
+	Not a YAML element. Used to treat 'radiation_space' like a normal element in code.
+	"""
+	def __init__(self, space: str = "4pi"):
+		space = (space or "4pi").strip().lower()
+		if space == "0.5pi":
+			space = "1/2pi"
+		if space not in {"4pi","2pi","1pi","1/2pi"}:
+			raise ValueError(f"Invalid radiation_space '{space}'.")
+		self.space = space
+
+	def make_piston(self, Sd: float):
+		return RadiationPiston(Sd=Sd, loading=self.space)
+
+	def __repr__(self):
+		return f"RadiationSpace({self.space})"
+
 @dataclass
+class SplitLoad:
+	"""
+	Represents one acoustic port feeding multiple downstream acoustic loads in parallel.
+	"""
+	def __init__(self, loads: list[Any]):
+		if not loads or not isinstance(loads, list):
+			raise ValueError("SplitLoad requires a non-empty list of loads")
+		self.loads = loads
+
+	def impedance(self, omega: np.ndarray) -> np.ndarray:
+		"""Equivalent impedance of downstream loads in parallel."""
+		Y_total = np.zeros_like(omega, dtype=complex)
+		for ld in self.loads:
+			Zi = ld.impedance(omega)
+			Y_total = Y_total + 1.0 / np.maximum(Zi, 1e-30)
+		Y_total = np.where(np.abs(Y_total) < 1e-24, 1e-24+0j, Y_total)
+		return 1.0 / Y_total
+
+	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
+		"""Split incoming volume velocity into branches proportional to admittance, and delegate."""
+		if U_in is None:
+			return []
+		Zs = [ld.impedance(omega) for ld in self.loads]
+		Ys = [1.0/np.maximum(Z, 1e-30) for Z in Zs]
+		Ytot = np.zeros_like(Ys[0], dtype=complex)
+		for Y in Ys:
+			Ytot = Ytot + Y
+		Ytot = np.where(np.abs(Ytot) < 1e-24, 1e-24+0j, Ytot)
+		channels = []
+		for ld, Y in zip(self.loads, Ys):
+			Ui = (Y / Ytot) * U_in
+			if hasattr(ld, "radiation_channels"):
+				chs = ld.radiation_channels(omega, U_in=Ui) or []
+				channels.extend(chs)
+		return channels
+
 class Acoustic(Element):
 	def radiation_channels(self, omega, U_in=None):
 		return []
@@ -150,23 +205,6 @@ def piston_directivity(Sd: float, omega: np.ndarray, theta_rad: np.ndarray) -> n
 	D = num / den
 	return D
 
-class RadiationSpace:
-	"""Internal helper holding a boundary (4pi/2pi/1pi/1/2pi).
-	Not a YAML element. Used to treat 'radiation_space' like a normal element in code.
-	"""
-	def __init__(self, space: str = "4pi"):
-		space = (space or "4pi").strip().lower()
-		if space == "0.5pi":
-			space = "1/2pi"
-		if space not in {"4pi","2pi","1pi","1/2pi"}:
-			raise ValueError(f"Invalid radiation_space '{space}'.")
-		self.space = space
-
-	def make_piston(self, Sd: float):
-		return RadiationPiston(Sd=Sd, loading=self.space)
-
-	def __repr__(self):
-		return f"RadiationSpace({self.space})"
 
 @dataclass
 class Horn(Acoustic):
