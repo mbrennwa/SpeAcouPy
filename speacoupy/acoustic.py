@@ -1,7 +1,6 @@
-
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import ClassVar, Optional, Iterable, Any
+from typing import ClassVar, Optional, Any
 import numpy as np
 from scipy.special import j1, struve  # wideband piston needs Bessel/Struve
 from .domains import Element, Domain
@@ -28,63 +27,32 @@ class RadiationSpace:
 	def __repr__(self):
 		return f"RadiationSpace({self.space})"
 
-@dataclass
-class SplitLoad:
-	"""
-	Represents one acoustic port feeding multiple downstream acoustic loads in parallel.
-	"""
-	def __init__(self, loads: list[Any]):
-		if not loads or not isinstance(loads, list):
-			raise ValueError("SplitLoad requires a non-empty list of loads")
-		self.loads = loads
-
-	def impedance(self, omega: np.ndarray) -> np.ndarray:
-		"""Equivalent impedance of downstream loads in parallel."""
-		Y_total = np.zeros_like(omega, dtype=complex)
-		for ld in self.loads:
-			Zi = ld.impedance(omega)
-			Y_total = Y_total + 1.0 / np.maximum(Zi, 1e-30)
-		Y_total = np.where(np.abs(Y_total) < 1e-24, 1e-24+0j, Y_total)
-		return 1.0 / Y_total
-
-	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
-		"""Split incoming volume velocity into branches proportional to admittance, and delegate."""
-		if U_in is None:
-			return []
-		Zs = [ld.impedance(omega) for ld in self.loads]
-		Ys = [1.0/np.maximum(Z, 1e-30) for Z in Zs]
-		Ytot = np.zeros_like(Ys[0], dtype=complex)
-		for Y in Ys:
-			Ytot = Ytot + Y
-		Ytot = np.where(np.abs(Ytot) < 1e-24, 1e-24+0j, Ytot)
-		channels = []
-		for ld, Y in zip(self.loads, Ys):
-			Ui = (Y / Ytot) * U_in
-			if hasattr(ld, "radiation_channels"):
-				chs = ld.radiation_channels(omega, U_in=Ui) or []
-				channels.extend(chs)
-		return channels
 
 class Acoustic(Element):
+	"""Base class for acoustic one-port elements."""
 	def radiation_channels(self, omega, U_in=None):
 		return []
 
 	domain: ClassVar[Domain] = Domain.ACOUSTIC
+
 
 @dataclass
 class Ra(Acoustic):
 	R: float = 0.0
 	def impedance(self, omega): return np.broadcast_to(self.R + 0j, omega.shape)
 
+
 @dataclass
 class Ma(Acoustic):
 	M: float = 0.0
 	def impedance(self, omega): return 1j * omega * self.M
 
+
 @dataclass
 class Ca(Acoustic):
 	C: float = 0.0
 	def impedance(self, omega): return 1/(1j * omega * self.C)
+
 
 @dataclass
 class SealedBox(Acoustic):
@@ -109,8 +77,7 @@ class Port(Acoustic):
 	diameter: float
 	length: float
 	Rp: float
-	### mouth_load: Optional[Acoustic] = None
-	mouth_load: Acoustic
+	mouth_load: Optional[Acoustic] = None
 	alpha_in: float = 0.85
 	alpha_out: float = 0.61
 	
@@ -131,6 +98,7 @@ class Port(Acoustic):
 		if self.Rp:
 			Z = Z + self.Rp
 		return Z
+
 
 @dataclass
 class VentedBox(Acoustic):
@@ -156,10 +124,62 @@ class VentedBox(Acoustic):
 		H = Yp / (Yp + Yb)
 		U_port = H * (U_in if U_in is not None else np.zeros_like(omega, dtype=complex))
 		label = getattr(self.port, "label", None)
-		# Enforce label only when the port radiates into radiation_space
-		if getattr(self, 'port_load', None) == 'radiation_space' and (label is None or (isinstance(label, str) and not label.strip())):
-			raise ValueError("VentedBox port requires 'port_label' when port_load is 'radiation_space'.")
 		return [ { "label": label, "U": U_port } ]
+
+
+@dataclass
+class SplitLoad(Acoustic):
+	"""
+	Represents one acoustic port feeding multiple downstream acoustic loads in parallel.
+	Used to model T-junctions or multiple vents. All branch impedances are combined in parallel
+	for the input impedance. Radiation channels are split by admittance.
+	"""
+	loads: list[Any]
+
+	def __post_init__(self):
+		if not self.loads or not isinstance(self.loads, list):
+			raise ValueError("SplitLoad requires a non-empty list of loads")
+
+	def impedance(self, omega: np.ndarray) -> np.ndarray:
+		Y_total = np.zeros_like(omega, dtype=complex)
+		for ld in self.loads:
+			if hasattr(ld, "impedance"):
+				Zi = ld.impedance(omega)
+			elif isinstance(ld, (float, complex)):
+				Zi = np.full_like(omega, complex(ld))
+			else:
+				raise TypeError(f"Invalid SplitLoad branch type: {type(ld)}")
+			Zi = np.where(np.abs(Zi) < 1e-24, 1e-24+0j, Zi)
+			Y_total = Y_total + 1.0 / Zi
+		Y_total = np.where(np.abs(Y_total) < 1e-24, 1e-24+0j, Y_total)
+		return 1.0 / Y_total
+
+	def radiation_channels(self, omega: np.ndarray, U_in: Optional[np.ndarray] = None):
+		if U_in is None:
+			return []
+		Zs = []
+		Ys = []
+		for ld in self.loads:
+			if hasattr(ld, "impedance"):
+				Zi = ld.impedance(omega)
+			elif isinstance(ld, (float, complex)):
+				Zi = np.full_like(omega, complex(ld))
+			else:
+				raise TypeError(f"Invalid SplitLoad branch type: {type(ld)}")
+			Zi = np.where(np.abs(Zi) < 1e-24, 1e-24+0j, Zi)
+			Zs.append(Zi)
+			Ys.append(1.0 / Zi)
+		Ytot = np.zeros_like(omega, dtype=complex)
+		for Y in Ys:
+			Ytot = Ytot + Y
+		Ytot = np.where(np.abs(Ytot) < 1e-24, 1e-24+0j, Ytot)
+		channels = []
+		for ld, Y in zip(self.loads, Ys):
+			Ui = (Y / Ytot) * U_in
+			if hasattr(ld, "radiation_channels"):
+				chs = ld.radiation_channels(omega, U_in=Ui) or []
+				channels.extend(chs)
+		return channels
 
 
 @dataclass
@@ -195,6 +215,7 @@ class RadiationPiston(Acoustic):
 		kb = kb_map.get((self.loading or "4pi").lower(), 1.0)
 		return kb * Z0
 
+
 def piston_directivity(Sd: float, omega: np.ndarray, theta_rad: np.ndarray) -> np.ndarray:
 	a = np.sqrt(Sd / np.pi)
 	k = omega / C0
@@ -227,7 +248,6 @@ class Horn(Acoustic):
 	mouth_label: Optional[str] = None
 	label: str = ""
 
-	# -------------------------- Validation / setup -------------------------- #
 	def __post_init__(self) -> None:
 		p = (self.profile or "").strip().lower()
 		if p in ("con", "conical", "cone"):
@@ -254,7 +274,6 @@ class Horn(Acoustic):
 			return '2pi'
 		raise ValueError(f"Horn: invalid mouth_termination {term!r}, must be 'free' or 'baffle'")
 
-	# ------------------------------ Utilities ------------------------------ #
 	@staticmethod
 	def _apex_distances(L: float, S1: float, S2: float) -> Optional[tuple[float, float, float]]:
 		s1 = np.sqrt(S1)
@@ -269,12 +288,8 @@ class Horn(Acoustic):
 		G = S1 / (r1 ** 2)
 		return float(r1), float(r2), float(G)
 
-	# ---------------- Mouth radiation (axisymmetric ring integral) ----------- #
 	def _get_mouth_grid(self, Nr: int = 48, Nphi: int = 64):
-		"""Axisymmetric aperture quadrature using **rings** and an azimuth integral.
-		Returns a cache with radii ri (midpoints), ring widths dr, ring areas wr,
-		and azimuth nodes/weights for the φ-integral used in the kernel K(ri,rj; k).
-		"""
+		"""Axisymmetric aperture quadrature using **rings** and an azimuth integral."""
 		a = float(np.sqrt(self.S_mouth / np.pi))
 		grid = getattr(self, "_mouth_grid", None)
 		if grid and grid.get("a") == a and grid.get("Nr") == Nr and grid.get("Nphi") == Nphi:
@@ -283,7 +298,7 @@ class Horn(Acoustic):
 		ri = (np.arange(Nr) + 0.5) * (a / Nr)
 		dr = a / Nr
 		wr = 2.0 * np.pi * ri * dr  # ring areas
-		# Azimuthal quadrature (uniform trapezoid is fine for periodic integrand)
+		# Azimuthal quadrature
 		phi = 2 * np.pi * (np.arange(Nphi) + 0.5) / Nphi
 		wphi = np.full(Nphi, 2*np.pi / Nphi)
 		grid = {"a": a, "Nr": Nr, "Nphi": Nphi, "ri": ri.astype(float), "dr": float(dr),
@@ -293,67 +308,32 @@ class Horn(Acoustic):
 		return grid
 
 	def _kernel_ring_avg(self, k: float, ri: np.ndarray, rj: np.ndarray, phi: np.ndarray, wphi: np.ndarray) -> np.ndarray:
-		"""Compute the azimuth-averaged Rayleigh kernel K_ij(k) for rings i,j:
-		K_ij = (1/2π)∫_0^{2π} e^{-jk R(ri,rj,φ)} / R(ri,rj,φ) dφ.
-		Vectorized over i,j with broadcasting.
-		"""
-		# ri: (Nr,), rj: (Nr,), phi: (Nphi,)
-		Ri = ri[:, None, None]  # (Nr,1,1)
-		Rj = rj[None, :, None]  # (1,Nr,1)
-		Phi = phi[None, None, :]  # (1,1,Nphi)
-		# Law of cosines in the plane (receiver on ring ri, source on ring rj)
-		R = np.sqrt(Ri*Ri + Rj*Rj - 2.0*Ri*Rj*np.cos(Phi))  # (Nr,Nr,Nphi)
-		# Avoid singularity for coincident points: use local cell size as floor
-		# Equivalent length scale ~ sqrt(dr^2 + (ri*dphi)^2); approximate with dr
+		"""Azimuth-averaged Rayleigh kernel K_ij(k) for rings i,j."""
+		Ri = ri[:, None, None]
+		Rj = rj[None, :, None]
+		Phi = phi[None, None, :]
+		R = np.sqrt(Ri*Ri + Rj*Rj - 2.0*Ri*Rj*np.cos(Phi))
+		# Avoid singularity for coincident points
 		dr = self._mouth_grid["dr"] if hasattr(self, "_mouth_grid") else (ri.max()/ri.size)
 		R = np.where(R < 1e-12, dr, R)
 		Kphi = np.exp(-1j * k * R) / R
-		# Average over φ with weights, then divide by 2π
 		Kij = (Kphi * wphi[None, None, :]).sum(axis=2) / (2*np.pi)
-		return Kij  # (Nr,Nr)
+		return Kij
 
 	def _pavg_from_u_ring(self, omega: float, u_ring: np.ndarray, grid: dict, loading: str) -> complex:
-		"""Compute **area-averaged** pressure over the aperture from ring-averaged
-		normal velocity `u_ring(ri)`, using the axisymmetric Rayleigh kernel.
-		"""
+		"""Area-averaged aperture pressure from ring-averaged normal velocity."""
 		k = omega / C0
 		if k == 0:
 			return 0.0
 		fac = 1.0 / (2 * np.pi) if str(loading).lower().startswith("2") else 1.0 / (4 * np.pi)
 		ri, wr, phi, wphi, Area = grid["ri"], grid["wr"], grid["phi"], grid["wphi"], grid["Area"]
-		K = self._kernel_ring_avg(k, ri, ri, phi, wphi)  # (Nr,Nr)
-		# Pressure at each receiver ring center from all source rings
-		p_ring = 1j * omega * RHO0 * fac * (K @ (u_ring * wr))  # (Nr,)
-		# Area-averaged pressure over aperture
+		K = self._kernel_ring_avg(k, ri, ri, phi, wphi)
+		p_ring = 1j * omega * RHO0 * fac * (K @ (u_ring * wr))
 		p_avg = (wr @ p_ring) / Area
 		return p_avg
-		ri = (np.arange(Nr) + 0.5) * (a / Nr)
-		dr = a / Nr
-		theta = 2 * np.pi * (np.arange(Nt) + 0.5) / Nt
-		Ri, Th = np.meshgrid(ri, theta, indexing="ij")
-		x = (Ri * np.cos(Th)).ravel()
-		y = (Ri * np.sin(Th)).ravel()
-		w = (dr * Ri) * (2 * np.pi / Nt)
-		w = w.ravel().astype(float)
-		# Pairwise distances in mouth plane
-		X = x[:, None] - x[None, :]
-		Y = y[:, None] - y[None, :]
-		R = np.sqrt(X * X + Y * Y)
-		# Regularize diagonal with a conservative cell-equivalent radius
-		eps = max(dr, a / (Nr * np.sqrt(np.pi)))
-		R[np.eye(R.shape[0], dtype=bool)] = eps
-		grid = {"a": a, "Nr": Nr, "Nt": Nt, "ri": ri, "dr": dr, "theta": theta,
-				"x": x, "y": y, "w": w, "R": R, "Area": float(self.S_mouth)}
-		self._mouth_grid = grid
-		return grid
-
-		J = np.exp(-1j * k * R) / R
-		return 1j * omega * RHO0 * fac * (J @ (u_nodes * w))
 
 	def _conical_mouth_Z_eff_iter(self, omega: np.ndarray, loading: str, n_iter: int = 2) -> np.ndarray:
-		"""Self-consistent effective radiation impedance for a **conical** mouth.
-		Axisymmetric ring integral (no θ-grid). Returns Z_eff(ω).
-		"""
+		"""Self-consistent effective radiation impedance for a **conical** mouth via ring integral."""
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
 		assert apex is not None
 		r1, r2, G = apex
@@ -361,14 +341,13 @@ class Horn(Acoustic):
 		g = self._get_mouth_grid(Nr=48, Nphi=64)
 		ri, wr, Area = g["ri"], g["wr"], g["Area"]
 		# initialize with baffled piston for stability
-		from .acoustic import RadiationPiston  # type: ignore
 		ZL = RadiationPiston(Sd=self.S_mouth, loading=loading).impedance(omega)
 		for _ in range(max(1, int(n_iter))):
 			BA = self._BA_ratio(k, r2, G, ZL)
 			Z_eff = np.empty_like(omega, dtype=complex)
 			for i, wv in enumerate(omega):
 				ki = k[i]
-				# Conical spherical-mode velocity **on the aperture plane** (ring centers)
+				# Conical spherical-mode velocity on aperture plane (ring centers)
 				r_loc = np.sqrt(r2 * r2 + ri * ri)
 				phase_out = np.exp(-1j * ki * r_loc)
 				t1 = -(1.0 + 1j * ki * r_loc)
@@ -381,13 +360,13 @@ class Horn(Acoustic):
 				u_ring = u_shape / u_avg
 				# Area-averaged pressure from ring kernel
 				p_avg = self._pavg_from_u_ring(wv, u_ring, g, loading)
-				# Power-consistent one-port: Z = p_avg / u_avg ; u_avg ≡ 1 by normalization
+				# One-port: Z = p_avg / u_avg ; u_avg ≡ 1
 				Z_eff[i] = p_avg
 			ZL = Z_eff
 		self._mouth_BA_cache = {"omega": omega, "BA": BA, "ZL": ZL}
 		return ZL
 
-	def _load_impedance_at_mouth(self, omega: np.ndarray) -> Optional[np.ndarray]:
+	def _load_impedance_at_mouth(self, omega: np.ndarray) -> np.ndarray:
 		Rm = float(self.R_mouth)
 		if self.mouth_load == "rigid":
 			ZL = np.full_like(omega, np.inf + 0j)
@@ -404,12 +383,10 @@ class Horn(Acoustic):
 			# Chained element (e.g., another Horn): use its input impedance as the load at our mouth
 			ZL = self.mouth_load.impedance(omega)
 		elif isinstance(self.mouth_load, str) and self.mouth_load:
-			return None
+			raise ValueError(f"Unresolved mouth_load '{self.mouth_load}'.")
 		else:
-			return None
+			raise ValueError("Mouth load not specified for horn mouth.")
 		return ZL + Rm
-
-
 
 	# --------------------------- Core cone solution ------------------------- #
 	def _BA_ratio(self, k: np.ndarray, r2: float, G: float, ZL: np.ndarray) -> np.ndarray:
@@ -431,6 +408,7 @@ class Horn(Acoustic):
 		Z0 = RHO0 * C0
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
 		if apex is None:
+			# Cylindrical (transmission line) input impedance
 			k0 = omega / C0
 			Zc = Z0 / self.S_throat
 			t = np.tan(k0 * self.L)
@@ -448,8 +426,6 @@ class Horn(Acoustic):
 	def impedance(self, omega: np.ndarray, ZL_external: Optional[np.ndarray] = None) -> np.ndarray:
 		ZL_local = self._load_impedance_at_mouth(omega)
 		ZL = ZL_external if ZL_external is not None else ZL_local
-		if ZL is None:
-			raise ValueError("Horn.impedance: mouth load is unspecified.")
 		Zin = self._conical_input_impedance(omega, ZL)
 		if self.R_throat:
 			Zin = Zin + float(self.R_throat)
@@ -463,21 +439,22 @@ class Horn(Acoustic):
 		Z0 = RHO0 * C0
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
 		if apex is None:
+			# Uniform cylindrical tube transfer to the mouth (lossless):
+			# U_mouth / U_in = 1 / (cos(kL) + j (ZL/Zc) sin(kL))
 			k0 = omega / C0
 			Zc = Z0 / self.S_throat
-			t = np.tan(k0 * self.L)
-			den = (Zc + 1j * (self._load_impedance_at_mouth(omega) or (np.inf+0j)) * t)
-			eps = (1e-12 + 1e-9 * np.max(np.abs(den)))
+			s = np.sin(k0 * self.L)
+			c = np.cos(k0 * self.L)
+			ZL = self._load_impedance_at_mouth(omega)
+			den = c + 1j * (ZL / Zc) * s
+			eps = 1e-12 + 1e-9 * np.max(np.abs(den))
 			den = np.where(np.abs(den) < eps, den + 1j * eps, den)
-			H_umouth = (Zc * (1.0 - 1j * t * Zc / (self._load_impedance_at_mouth(omega) or (np.inf+0j)))) / den
+			H_umouth = 1.0 / den
 			U_mouth = H_umouth * U_in
 		else:
 			r1, r2, G = apex
 			k = omega / C0
 			ZL = self._load_impedance_at_mouth(omega)
-			if ZL is None:
-				# treat as rigid for transfer estimate; no radiation output anyway
-				ZL = np.full_like(omega, np.inf + 0j)
 			BA = self._BA_ratio(k, r2, G, ZL)
 			U1 = self._U(r1, k, G, BA)
 			U2 = self._U(r2, k, G, BA)
