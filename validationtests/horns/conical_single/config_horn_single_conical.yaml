@@ -6,16 +6,22 @@ radiation_space: 2pi
 elements:
 
 - type: horn
-  label: HORN
-  L: 2.5
-  S_throat: 400E-4      # m²
-  S_mouth:  3600E-4      # m²
-  R_throat: 1
-  R_mouth: 30
+  label: FRONTHORN
+  L: 1.0
+  S_throat: 200E-4      # m²
+  S_mouth:  200.1E-4      # m²
+  R_throat: 0
+  R_mouth: 0
   profile: conical
   mouth_load: radiation_space
   mouth_label: HORN_MOUTH
-  mouth_termination: baffle
+  mouth_termination: free
+
+
+- type: sealed_box
+  label: REARCHAMBER
+  Vb: 10E-3
+  Rb: 1E-20
 
 - type: driver
   label: DRIVER
@@ -26,10 +32,8 @@ elements:
   Sd: 200E-4
   Re: 8.0
   Z_hf: [ [1E3,8.0] , [1E4,8.0]]
-  front_load: radiation_space
-  back_load: HORN
-  front_radiator_label: DRIVER_FRONT
-  back_radiator_label: DRIVER_BACK
+  front_load: FRONTHORN
+  back_load: REARCHAMBER
 
 circuit:
   series:
