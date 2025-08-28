@@ -162,9 +162,10 @@ def load_config(path: str) -> dict:
 	# Detect & auto-sanitize suspicious whitespace before YAML parse
 	offenses = find_yaml_offenses(raw)
 	if offenses:
-		print("[WARN] Non-standard whitespace found in YAML; normalizing before parse.")
+		### REPLACE WITH LOGGER WARNING:
+		print("[WARN] Non-standard whitespace found in YAML; normalizing before parse.") 
 		for off in offenses[:5]:
-			print(f"  {path}:{off.line}:{off.col} – {off.description}")
+			print(f"  {path}:{off.line}:{off.col} – {off.description}") 
 		if len(offenses) > 5:
 			print(f"  ...and {len(offenses)-5} more.")
 	cleaned = sanitize_yaml_text(raw, strict=False)
@@ -637,7 +638,7 @@ def main(argv=None):
 		with busy("Writing CSV..."):
 			write_fresponse_csv(res, args.outdir, pre, loading_label)
 		outputs.append("CSV")
-	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/')
+	print(f'Wrote: {", ".join(outputs)} to {args.outdir}/') ### REPLACE WITH LOGGER INFO
 	return 0
 
 if __name__ == "__main__":
