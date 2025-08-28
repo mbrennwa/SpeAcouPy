@@ -19,17 +19,6 @@ class MechToElec(Element):
 		return (self.Bl**2) / Zm
 
 @dataclass
-class ElecToMech(Element):
-# convert electrical impedance to mechanical domain
-	load: Electrical
-	Bl: float
-	domain: ClassVar[Domain] = Domain.MECHANICAL
-	def impedance(self, omega):
-		Ze = self.load.impedance(omega)
-		print('Hello from ElecToMech')
-		return (self.Bl**2) / Ze
-
-@dataclass
 class AcToMech(Element):
 # convert acoustic impedance to mechanical domain
 	load: Acoustic

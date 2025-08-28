@@ -13,7 +13,7 @@ from .acoustic import (
     piston_directivity,
 )
 
-from .transformers import AcToMech, MechToElec, ElecToMech
+from .transformers import AcToMech, MechToElec
 from .driver import DriverMechanicalBranch, Driver
 from .response import ResponseSolver, ResponseResult, omega_logspace
 from .plotting import plot_spl, plot_impedance, plot_spl_multi
