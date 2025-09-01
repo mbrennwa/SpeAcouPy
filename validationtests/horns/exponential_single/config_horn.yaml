@@ -1,0 +1,48 @@
+# simulation of a driver with its front radiating into free space and the back into a flared horn
+# the speacoupy output does not perfectly agree with the AJ Horn output because AJ Horn uses a plane-wave approximation for the flared horn
+
+radiation_space: 2pi
+
+elements:
+
+- type: horn
+  label: FRONTHORN
+  L: 1.0
+  S_throat: 200E-4      # m²
+  S_mouth:  8000E-4      # m²
+  R_throat: 0
+  R_mouth: 0
+  profile: exponential
+  mouth_load: radiation_space
+  mouth_label: HORN_MOUTH
+  mouth_termination: baffle
+
+
+- type: sealed_box
+  label: REARCHAMBER
+  Vb: 10E-3
+  Rb: 1E-9
+
+- type: driver
+  label: DRIVER
+  fs: 35.0
+  Vas: 60e-3
+  Qms: 3.5
+  Qes: 0.35
+  Sd: 200E-4
+  Re: 8.0
+  Z_hf: [ [1E3,8.0] , [1E4,8.0]]
+  front_load: FRONTHORN
+  back_load: REARCHAMBER
+
+circuit:
+  series:
+  - DRIVER
+
+frequency:
+  min: 10
+  max: 2000
+  points: 100
+
+source:
+  volts_rms: 2.83

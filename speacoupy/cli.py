@@ -220,13 +220,12 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		return RadiationPiston(Sd=Sd_final, loading=loading)
 	
 	if t == "horn":
-		# Validate presence of profile and R_throat/R_mouth; leave detailed checks to Horn class
+		# Horn: route by profile; generic uses area_list only; conical/exponential use L,S_throat,S_mouth
 		if "profile" not in spec:
 			raise KeyError("horn: missing required key 'profile'")
 		for kreq in ("R_throat", "R_mouth"):
 			if kreq not in spec:
 				raise KeyError(f"horn: missing required key '{kreq}'")
-		# Only require mouth_termination when this horn radiates to space
 		_mouth_load_raw = (spec.get("mouth_load") or "radiation_space")
 		if isinstance(_mouth_load_raw, str) and _mouth_load_raw.strip().lower() == "radiation_space":
 			if "mouth_termination" not in spec:
@@ -241,57 +240,17 @@ def build_acoustic(spec: Dict[str, Any], Sd: float | None):
 		R_mouth  = float(spec["R_mouth"])
 		if R_throat < 0.0 or R_mouth < 0.0:
 			raise ValueError("horn: R_throat and R_mouth must be ≥ 0 (Pa·s/m^3)")
-		if profile in ("con", "conical", "cone"):
-			# For conical, require L/S_throat/S_mouth and reject area_list
+		if profile in ("con", "conical", "cone", "exp", "exponential"):
 			for kreq in ("L", "S_throat", "S_mouth"):
 				if kreq not in spec:
-					raise KeyError(f"horn: missing required key '{kreq}' for conical profile")
+					raise KeyError(f"horn: missing required key '{kreq}' for profile={profile}")
 			if "area_list" in spec and spec["area_list"] is not None:
-				raise ValueError("horn(profile=conical): area_list is not allowed.")
-			allowed = {
-				"type","label","L","S_throat","S_mouth","profile",
-				"mouth_load","mouth_label","throat_load","throat_label",
-				"R_throat","R_mouth","mouth_termination"
-			}
-			unknown = set(spec.keys()) - allowed
-			if unknown:
-				raise KeyError(f"horn: unknown keys: {sorted(unknown)}")
-			return Horn(
-				L=float(spec["L"]),
-				S_throat=float(spec["S_throat"]),
-				S_mouth=float(spec["S_mouth"]),
-				profile=profile,
-				R_throat=R_throat,
-				R_mouth=R_mouth,
-				mouth_load=mouth_load,
-				mouth_label=mouth_label,
-				throat_load=throat_load,
-				throat_label=throat_label,
-				mouth_termination=mouth_termination,
-			)
+				raise ValueError(f"horn(profile={profile}): area_list is not allowed.")
+			return Horn(L=float(spec["L"]), S_throat=float(spec["S_throat"]), S_mouth=float(spec["S_mouth"]), profile=profile, R_throat=R_throat, R_mouth=R_mouth, mouth_load=mouth_load, mouth_label=mouth_label, throat_load=throat_load, throat_label=throat_label, mouth_termination=mouth_termination)
 		elif profile == "generic":
-			# For generic, require area_list as list of [x,S] pairs; other checks happen in Horn
 			if "area_list" not in spec:
 				raise KeyError("horn(profile=generic): missing required key 'area_list'")
-			allowed = {
-				"type","label","area_list","profile",
-				"mouth_load","mouth_label","throat_load","throat_label",
-				"R_throat","R_mouth","mouth_termination"
-			}
-			unknown = set(spec.keys()) - allowed
-			if unknown:
-				raise KeyError(f"horn: unknown keys: {sorted(unknown)}")
-			return Horn(
-				profile="generic",
-				area_list=list(spec["area_list"]),
-				R_throat=R_throat,
-				R_mouth=R_mouth,
-				mouth_load=mouth_load,
-				mouth_label=mouth_label,
-				throat_load=throat_load,
-				throat_label=throat_label,
-				mouth_termination=mouth_termination,
-			)
+			return Horn(profile="generic", area_list=list(spec["area_list"]), R_throat=R_throat, R_mouth=R_mouth, mouth_load=mouth_load, mouth_label=mouth_label, throat_load=throat_load, throat_label=throat_label, mouth_termination=mouth_termination)
 		else:
 			raise ValueError(f"horn: unknown profile {profile!r}")
 

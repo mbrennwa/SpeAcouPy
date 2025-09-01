@@ -230,9 +230,10 @@ def piston_directivity(Sd: float, omega: np.ndarray, theta_rad: np.ndarray) -> n
 @dataclass
 class Horn(Acoustic):
 	"""
-	Conical or generic horn element.
-	Conical: exact spherical-wave interior with self-consistent mouth radiation.
-	Generic: poly-conical chain built from area_list.
+	Conical horn element with exact spherical-wave interior and a
+	profile-aware **self-consistent** mouth radiation model.
+
+	Only the **conical** profile is supported in this revision.
 	"""
 	L: float = 0.0
 	S_throat: float = 0.0
@@ -250,19 +251,71 @@ class Horn(Acoustic):
 
 	def __post_init__(self) -> None:
 		p = (self.profile or "").strip().lower()
-		# Require R_throat and R_mouth (non-negative, explicit)
-		if not (self.R_throat >= 0.0 and self.R_mouth >= 0.0):
-			raise ValueError("Horn: R_throat and R_mouth must be ≥ 0.")
+		# Exponential horn: accuracy-oriented discretization
+		if p in ("exp", "exponential"):
+			if not (self.R_throat >= 0.0 and self.R_mouth >= 0.0):
+				raise ValueError("Horn: R_throat and R_mouth must be ≥ 0.")
+			if not (self.L > 0.0 and self.S_throat > 0.0 and self.S_mouth > 0.0):
+				raise ValueError("Horn(profile=exponential): L, S_throat, S_mouth must be > 0.")
+			Ltot = float(self.L)
+			S0 = float(self.S_throat)
+			S1 = float(self.S_mouth)
+			R = S1 / S0
+			if R <= 0.0:
+				raise ValueError("Horn(profile=exponential): S_mouth/S_throat must be > 0.")
+			if R == 1.0:
+				self.profile = "con"
+				return
+			mexp = float(np.log(R) / Ltot)
+			# N = clip(8,64, ceil(6 * ln R))
+			N = int(np.clip(np.ceil(6.0 * np.log(R)), 8, 64))
+			# Node placement equalizing ∫S^(1/4)dx: x_i = (4/m) ln(1 + (i/N)(e^{mL/4}-1))
+			alpha = float(np.exp(mexp * Ltot / 4.0) - 1.0)
+			x = [0.0]
+			if abs(mexp) < 1e-16 or alpha <= 0.0:
+				x = [ (Ltot * i) / N for i in range(N+1) ]
+			else:
+				for i in range(1, N):
+					xi = (4.0 / mexp) * np.log(1.0 + alpha * (i / N))
+					x.append(float(xi))
+				x.append(Ltot)
+			S = [ float(S0 * np.exp(mexp * xx)) for xx in x ]
+			def R_interp(xx: float) -> float:
+				return float(self.R_throat + (self.R_mouth - self.R_throat) * (xx / Ltot))
+			sections = []
+			for i in range(len(x)-1):
+				Li = x[i+1] - x[i]
+				Si = S[i]
+				Si1 = S[i+1]
+				Ri_th = R_interp(x[i])
+				Ri_mo = R_interp(x[i+1])
+				th_lab = self.throat_label if i == 0 else None
+				mo_lab = self.mouth_label if i == (len(x)-2) else None
+				mo_load = self.mouth_load if i == (len(x)-2) else None
+				sec = Horn(L=Li, S_throat=Si, S_mouth=Si1, profile="con", R_throat=Ri_th, R_mouth=Ri_mo, mouth_load=mo_load, mouth_label=mo_lab, throat_load=self.throat_load if i == 0 else None, throat_label=th_lab, mouth_termination=self.mouth_termination, label=self.label)
+				sections.append(sec)
+			for i in range(len(sections)-1):
+				sections[i].mouth_load = sections[i+1]
+			first = sections[0]
+			self.L = first.L
+			self.S_throat = first.S_throat
+			self.S_mouth = first.S_mouth
+			self.profile = "con"
+			self.R_throat = first.R_throat
+			self.R_mouth = first.R_mouth
+			self.throat_load = first.throat_load
+			self.throat_label = first.throat_label
+			self.mouth_load = first.mouth_load
+			self.mouth_label = first.mouth_label
+			return
+		p = (self.profile or "").strip().lower()
 		if p in ("generic",):
-			# Validate area_list: list of [x, S] pairs
 			alist = self.area_list
 			if not (isinstance(alist, list) and len(alist) >= 2):
 				raise ValueError("Horn(profile=generic): area_list must contain at least two [x,S] pairs.")
-			# Exact x0==0.0 rule (no tolerance)
 			x0 = float(alist[0][0])
 			if x0 != 0.0:
 				raise ValueError("Horn(profile=generic): area_list[0][0] must be exactly 0.0.")
-			# Extract arrays and validate monotonic x and positive S
 			x = [float(pair[0]) for pair in alist]
 			S = [float(pair[1]) for pair in alist]
 			for i in range(len(x)-1):
@@ -275,10 +328,8 @@ class Horn(Acoustic):
 			Ltot = x[-1]
 			if not (Ltot > 0.0):
 				raise ValueError("Horn(profile=generic): total length must be > 0.")
-			# Linear interpolation R(x) from R_throat at 0 to R_mouth at Ltot
 			def R_interp(xx: float) -> float:
 				return float(self.R_throat + (self.R_mouth - self.R_throat) * (xx / Ltot))
-			# Build sections; mutate self into first section and chain the rest via mouth_load
 			sections = []
 			for i in range(len(x)-1):
 				Li = x[i+1] - x[i]
@@ -286,25 +337,13 @@ class Horn(Acoustic):
 				Si1 = S[i+1]
 				Ri_th = R_interp(x[i])
 				Ri_mo = R_interp(x[i+1])
-				# Labels: throat on first only; mouth on last only
 				th_lab = self.throat_label if i == 0 else None
 				mo_lab = self.mouth_label if i == (len(x)-2) else None
-				# Mouth termination/load: attach real load only on last; otherwise will be next section
 				mo_load = self.mouth_load if i == (len(x)-2) else None
-				sec = Horn(
-					L=Li, S_throat=Si, S_mouth=Si1, profile="con",
-					R_throat=Ri_th, R_mouth=Ri_mo,
-					mouth_load=mo_load, mouth_label=mo_lab,
-					throat_load=self.throat_load if i == 0 else None,
-					throat_label=th_lab,
-					mouth_termination=self.mouth_termination,
-					label=self.label
-				)
+				sec = Horn(L=Li, S_throat=Si, S_mouth=Si1, profile="con", R_throat=Ri_th, R_mouth=Ri_mo, mouth_load=mo_load, mouth_label=mo_lab, throat_load=self.throat_load if i == 0 else None, throat_label=th_lab, mouth_termination=self.mouth_termination, label=self.label)
 				sections.append(sec)
-			# Chain sections via mouth_load
 			for i in range(len(sections)-1):
 				sections[i].mouth_load = sections[i+1]
-			# Mutate self into the first section
 			first = sections[0]
 			self.L = first.L
 			self.S_throat = first.S_throat
@@ -316,25 +355,25 @@ class Horn(Acoustic):
 			self.throat_label = first.throat_label
 			self.mouth_load = first.mouth_load
 			self.mouth_label = first.mouth_label
-			# area_list no longer needed for self
 			self.area_list = None
-			# Done; self now behaves as first conical; remaining sections are chained.
 			return
-		# Conical path
+		p = (self.profile or "").strip().lower()
 		if p in ("con", "conical", "cone"):
 			self.profile = "con"
-			# Reject area_list if present
-			if self.area_list is not None:
-				raise ValueError("Horn(profile=conical): area_list is not allowed.")
-			if not (self.L > 0.0 and self.S_throat > 0.0 and self.S_mouth > 0.0):
-				raise ValueError("Horn: L, S_throat, S_mouth must be > 0.")
 		else:
-			raise NotImplementedError("Horn: unsupported profile; use 'conical' or 'generic'.")
-		# Common checks for conical (and first section of generic already transformed)
+			raise NotImplementedError("Horn: only conical profile is supported in this revision.")
+
+		if not (self.L > 0.0 and self.S_throat > 0.0 and self.S_mouth > 0.0):
+			raise ValueError("Horn: L, S_throat, S_mouth must be > 0.")
+		if not (self.R_throat >= 0.0 and self.R_mouth >= 0.0):
+			raise ValueError("Horn: R_throat and R_mouth must be ≥ 0.")
+
 		if self.mouth_load == "radiation_space" and not self.mouth_label:
 			raise ValueError("Horn: mouth_label is required when mouth_load='radiation_space'.")
 		if self.throat_load == "radiation_space" and not self.throat_label:
 			raise ValueError("Horn: throat_label is required when throat_load='radiation_space'.")
+		if p in ("con", "conical", "cone") and (self.area_list is not None):
+			raise ValueError("Horn(profile=conical): area_list is not allowed.")
 
 	def _mouth_termination(self) -> str:
 		"""Map 'free'|'baffle' → loading string expected by radiation models."""
