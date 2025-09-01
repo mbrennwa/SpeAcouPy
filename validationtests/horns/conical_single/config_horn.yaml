@@ -19,9 +19,9 @@ elements:
 
 
 - type: sealed_box
-  label: REARACHAMBER
-  volume: 10E-3
-  Rb: 0
+  label: REARCHAMBER
+  Vb: 10E-3
+  Rb: 1E-9
 
 - type: driver
   label: DRIVER
