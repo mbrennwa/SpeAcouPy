@@ -1,0 +1,47 @@
+# simulation of a driver with its front radiating into free space and the back into a flared horn with a custom flare
+
+radiation_space: 2pi
+
+elements:
+
+- type: horn
+  label: BACKHORN
+  R_throat: 0
+  R_mouth: 0
+  profile: generic
+  area_list:
+      - [0.0, 200E-4]     # x=0.0 m, throat area
+      - [1.0, 1800E-4]
+      - [2.0, 5000E-4]
+      - [3.0, 9800E-4]
+      - [4.0, 16200E-4]
+  mouth_load: radiation_space
+  mouth_label: HORN_MOUTH
+  mouth_termination: baffle
+
+
+- type: driver
+  label: DRIVER
+  fs: 35.0
+  Vas: 60e-3
+  Qms: 3.5
+  Qes: 0.35
+  Sd: 200E-4
+  Re: 8.0
+  Z_hf: [ [1E3,8.0] , [1E4,8.0]]
+  front_load: radiation_space
+  back_load: BACKHORN
+  front_radiator_label: DRIVER_FRONT
+  back_radiator_label: DRIVER_BACK
+
+circuit:
+  series:
+  - DRIVER
+
+frequency:
+  min: 10
+  max: 2000
+  points: 100
+
+source:
+  volts_rms: 2.83
