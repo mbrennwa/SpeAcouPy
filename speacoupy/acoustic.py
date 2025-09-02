@@ -230,10 +230,7 @@ def piston_directivity(Sd: float, omega: np.ndarray, theta_rad: np.ndarray) -> n
 @dataclass
 class Horn(Acoustic):
 	"""
-	Conical horn element with exact spherical-wave interior and a
-	profile-aware **self-consistent** mouth radiation model.
-
-	Only the **conical** profile is supported in this revision.
+	Horn class
 	"""
 	L: float = 0.0
 	S_throat: float = 0.0
@@ -444,6 +441,14 @@ class Horn(Acoustic):
 
 	def _conical_mouth_Z_eff_iter(self, omega: np.ndarray, loading: str, n_iter: int = 2) -> np.ndarray:
 		"""Self-consistent effective radiation impedance for a **conical** mouth via ring integral."""
+		
+		
+		
+		print('**** Horn._conical_mouth_Z_eff_iter: consider reworking this using the equations for the horn mouth radiation impedance in chapter 12 (eqns 12.87 and 12.88) ****')
+		
+		
+		
+		
 		apex = self._apex_distances(self.L, self.S_throat, self.S_mouth)
 		assert apex is not None
 		r1, r2, G = apex

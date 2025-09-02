@@ -1,0 +1,54 @@
+# simulation of the horn in Beranek/Mellow: Acoustic Transducers, Expample 9.4, p. 441ff
+
+radiation_space: 2pi
+
+elements:
+
+- type: horn
+  label: MELLOWHORN
+  R_throat: 0
+  R_mouth: 0
+  profile: conical
+  S_mouth: 29.3E-4      # p. 446
+  S_throat: 2.52E-4     # p. 446
+  L: 53E-3              # p. 446: L = rM - rT = 75 mm - 22 mm
+  mouth_load: radiation_space
+  mouth_label: HORN_MOUTH
+  mouth_termination: free
+
+- type: horn
+  label: FRONTCAVITY
+  R_throat: 0
+  R_mouth: 0
+  profile: conical
+  S_mouth: 7E-4         # Sd
+  S_throat: 2.52E-4     # p. 446
+  L: 3.06E-3
+  mouth_load: MELLOWHORN  
+
+- type: driver
+  label: DRIVER
+  fs: 750
+  Vas: 9.6e-6
+  Qms: 1.64
+  Qes: 0.75
+  Sd: 7E-4
+  Re: 4.9
+  Z_hf: [ [5E3,5.2] , [2E4,7]]
+  front_load: FRONTCAVITY
+# front_load: radiation_space
+  back_load: radiation_space
+  front_radiator_label: DRIVER_FRONT
+  back_radiator_label: DRIVER_BACK
+
+circuit:
+  series:
+  - DRIVER
+
+frequency:
+  min: 100
+  max: 20000
+  points: 100
+
+source:
+  volts_rms: 2.83
